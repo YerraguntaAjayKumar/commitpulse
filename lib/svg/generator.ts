@@ -15,7 +15,14 @@ function deterministicRandom(seed: string): number {
   }
   return (hash >>> 0) / 4294967296;
 }
-
+function escapeXML(str: string): string {
+  return str
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
 function generateParticles(
   x: number,
   y: number,
@@ -148,6 +155,7 @@ export function generateSVG(
   if (params.autoTheme) {
     return generateAutoThemeSVG(stats, params, calendar);
   }
+  const safeUser = escapeXML(params.user || 'GitHub User');
 
   const bg = `#${(params.bg || '0d1117').replace('#', '')}`;
   const accent = `#${(params.accent || '00ffaa').replace('#', '')}`;
@@ -216,7 +224,18 @@ export function generateSVG(
       : '';
 
   return `
-<svg xmlns="http://www.w3.org/2000/svg" width="600" height="420" viewBox="0 0 600 420" fill="none">
+<svg
+  xmlns="http://www.w3.org/2000/svg"
+  width="600"
+  height="420"
+  viewBox="0 0 600 420"
+  fill="none"
+  role="img"
+>
+  <title>CommitPulse Stats for ${safeUser}</title>
+  <desc>
+    ${params.user || 'This user'} has ${stats.totalContributions} total contributions and a longest streak of ${stats.longestStreak} days.
+  </desc>
   <defs>
     <filter id="glow" x="-50%" y="-50%" width="200%" height="200%">
       <feGaussianBlur stdDeviation="5" result="blur" />
@@ -287,7 +306,7 @@ export function generateSVG(
     <text y="40" class="stats">${stats.longestStreak}</text>
   </g>
 
-  <text x="300" y="50" text-anchor="middle" class="title">${params.user?.toUpperCase() || ''}</text>
+  <text x="300" y="50" text-anchor="middle" class="title">${safeUser.toUpperCase()}</text>
 
   <rect x="100" y="60" width="400" height="1" fill="${accent}" fill-opacity="0.3">
     <animate attributeName="y" values="80;320;80" dur="${params.speed || '8s'}" repeatCount="indefinite" />
@@ -313,6 +332,7 @@ function generateAutoThemeSVG(
 ): string {
   const light = AUTO_LIGHT_THEME;
   const dark = AUTO_DARK_THEME;
+  const safeUser = escapeXML(params.user || 'GitHub User');
 
   const selectedFont = params.font
     ? FONT_MAP[params.font.toLowerCase()] || '"JetBrains Mono", monospace'
@@ -363,7 +383,18 @@ function generateAutoThemeSVG(
   }
 
   return `
-<svg xmlns="http://www.w3.org/2000/svg" width="600" height="420" viewBox="0 0 600 420" fill="none">
+<svg
+  xmlns="http://www.w3.org/2000/svg"
+  width="600"
+  height="420"
+  viewBox="0 0 600 420"
+  fill="none"
+  role="img"
+>
+  <title>CommitPulse Stats for ${safeUser} </title>
+  <desc>
+    ${params.user || 'This user'} has ${stats.totalContributions} total contributions and a longest streak of ${stats.longestStreak} days.
+  </desc>
   <defs>
     <filter id="glow" x="-50%" y="-50%" width="200%" height="200%">
       <feGaussianBlur stdDeviation="5" result="blur" />
@@ -455,7 +486,7 @@ function generateAutoThemeSVG(
     <text y="40" class="stats">${stats.longestStreak}</text>
   </g>
 
-  <text x="300" y="50" text-anchor="middle" class="title">${params.user?.toUpperCase() || ''}</text>
+  <text x="300" y="50" text-anchor="middle" class="title">${safeUser.toUpperCase()}</text>
 
   <rect x="100" y="60" width="400" height="1" class="cp-accent-fill" fill-opacity="0.3">
     <animate attributeName="y" values="80;320;80" dur="${params.speed || '8s'}" repeatCount="indefinite" />
