@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { motion } from 'framer-motion';
 import { ControlsPanel } from './components/ControlsPanel';
 import { ExportPanel } from './components/ExportPanel';
+import InteractiveViewer from '@/components/InteractiveViewer';
 import type {
   ExportFormat,
   Font,
@@ -13,6 +14,7 @@ import type {
   ViewMode,
   DeltaFormat,
   Language,
+  Timezone,
 } from './types';
 import { getExportSnippet, buildQueryParams } from './utils';
 
@@ -39,6 +41,7 @@ export default function CustomizePage(): ReactElement {
   const [badgeHeight, setBadgeHeight] = useState<number | ''>('');
   const [grace, setGrace] = useState<number>(1);
   const [language, setLanguage] = useState<Language>('en');
+  const [timezone, setTimezone] = useState<Timezone>('UTC');
   const [exportFormat, setExportFormat] = useState<ExportFormat>('markdown');
   const [copied, setCopied] = useState(false);
   const [copyStatusMessage, setCopyStatusMessage] = useState('');
@@ -82,8 +85,50 @@ export default function CustomizePage(): ReactElement {
 
   // ── buildQueryParams ──────────────────────────────────────────────────────
 
-  const queryString = buildQueryParams({
-    username,
+  const buildQueryParams = useCallback((): string => {
+    const params = new URLSearchParams();
+
+    if (hasUsername) {
+      params.set('user', trimmedUsername);
+    }
+
+    if (skipsCustomColors) {
+      // Virtual themes always emit theme=<name> and skip custom color params.
+      params.set('theme', theme);
+    } else {
+      const hasCustomColors = bgHex || accentHex || textHex;
+
+      // Custom hex colors take priority over theme
+      if (!hasCustomColors) {
+        params.set('theme', theme);
+      }
+      if (bgHex) params.set('bg', stripHash(bgHex));
+      if (accentHex) params.set('accent', stripHash(accentHex));
+      if (textHex) params.set('text', stripHash(textHex));
+    }
+
+    if (scale !== 'linear') params.set('scale', scale);
+    if (speed !== '8s') params.set('speed', speed);
+    if (font) params.set('font', font);
+    if (year) params.set('year', year);
+    if (radius !== 8) params.set('radius', radius.toString());
+    if (size !== 'medium') params.set('size', size);
+
+    if (hideTitle) params.set('hide_title', 'true');
+    if (hideBackground) params.set('hide_background', 'true');
+    if (hideStats) params.set('hide_stats', 'true');
+    if (viewMode !== 'default') params.set('view', viewMode);
+    if (deltaFormat !== 'percent') params.set('delta_format', deltaFormat);
+    if (badgeWidth !== '') params.set('width', badgeWidth.toString());
+    if (badgeHeight !== '') params.set('height', badgeHeight.toString());
+    if (grace !== 1) params.set('grace', grace.toString());
+    if (language !== 'en') params.set('lang', language);
+    if (timezone !== 'UTC') params.set('tz', timezone);
+
+    return params.toString();
+  }, [
+    hasUsername,
+    trimmedUsername,
     theme,
     bgHex,
     accentHex,
@@ -104,8 +149,36 @@ export default function CustomizePage(): ReactElement {
     grace,
     language,
   });
+    timezone,
+  ]);
+
+  const queryString = buildQueryParams();
   const previewSrc = `/api/streak?${queryString}`;
   const exportSnippet = getExportSnippet(exportFormat, queryString);
+
+  const fallbackCopyToClipboard = (text: string): boolean => {
+    try {
+      const textArea = document.createElement('textarea');
+
+      textArea.value = text;
+      textArea.style.position = 'fixed';
+      textArea.style.opacity = '0';
+      textArea.style.pointerEvents = 'none';
+
+      document.body.appendChild(textArea);
+
+      textArea.focus();
+      textArea.select();
+
+      const successful = document.execCommand('copy');
+
+      document.body.removeChild(textArea);
+
+      return successful;
+    } catch {
+      return false;
+    }
+  };
 
   const announceCopyStatus = useCallback((message: string): void => {
     setCopyStatusMessage('');
@@ -118,8 +191,18 @@ export default function CustomizePage(): ReactElement {
     if (!hasUsername) return;
 
     try {
-      await navigator.clipboard.writeText(exportSnippet);
+      if (navigator.clipboard && window.isSecureContext) {
+        await navigator.clipboard.writeText(exportSnippet);
+      } else {
+        const copiedSuccessfully = fallbackCopyToClipboard(exportSnippet);
+
+        if (!copiedSuccessfully) {
+          throw new Error('Fallback clipboard copy failed.');
+        }
+      }
+
       setCopied(true);
+
       announceCopyStatus(
         `${exportFormat === 'markdown' ? 'Markdown' : 'HTML'} snippet copied to clipboard.`
       );
@@ -134,6 +217,7 @@ export default function CustomizePage(): ReactElement {
       }, 3000);
     } catch {
       setCopied(false);
+
       announceCopyStatus(
         `Unable to copy the ${exportFormat === 'markdown' ? 'Markdown' : 'HTML'} snippet.`
       );
@@ -181,7 +265,7 @@ export default function CustomizePage(): ReactElement {
           <div className="h-4 w-px bg-white/10" />
 
           <div>
-            <span className="text-xs font-bold uppercase tracking-[0.22em] text-emerald-400">
+            <span className="text-xs font-bold uppercase tracking-[0.22em] text-emerald-600 dark:text-emerald-400">
               Customization Studio
             </span>
           </div>
@@ -249,6 +333,7 @@ export default function CustomizePage(): ReactElement {
               badgeHeight={badgeHeight}
               grace={grace}
               language={language}
+              timezone={timezone}
               onHideTitleChange={setHideTitle}
               onHideBackgroundChange={setHideBackground}
               onHideStatsChange={setHideStats}
@@ -258,6 +343,7 @@ export default function CustomizePage(): ReactElement {
               onBadgeHeightChange={setBadgeHeight}
               onGraceChange={setGrace}
               onLanguageChange={setLanguage}
+              onTimezoneChange={setTimezone}
             />
           </motion.aside>
 
@@ -270,7 +356,7 @@ export default function CustomizePage(): ReactElement {
           >
             {/* Live Preview */}
             <div className="bg-white/70 backdrop-blur-xl border border-black/10 dark:bg-black/35 dark:border-white/10 rounded-[1.75rem] p-6 shadow-[0_20px_60px_rgba(0,0,0,0.35)]">
-              <p className="text-xs font-bold uppercase tracking-[0.22em] text-emerald-400 mb-5">
+              <p className="text-xs font-bold uppercase tracking-[0.22em] text-emerald-600 dark:text-emerald-400 mb-5">
                 Live Preview
               </p>
 
@@ -278,7 +364,7 @@ export default function CustomizePage(): ReactElement {
                 {/* Glow ring */}
                 <div className="absolute -inset-px bg-gradient-to-br from-emerald-500/20 to-purple-500/20 rounded-[1.5rem] opacity-0 group-hover:opacity-100 transition-opacity duration-700 blur-lg pointer-events-none" />
 
-                <div className="relative bg-white/60 backdrop-blur-md border border-black/10 dark:bg-black/40 dark:border-white/10 rounded-[1.25rem] overflow-hidden flex items-center justify-center p-6 min-h-[280px]">
+                <InteractiveViewer className="relative bg-white/60 backdrop-blur-md border border-black/10 dark:bg-black/40 dark:border-white/10 rounded-[1.25rem] flex items-center justify-center p-6 min-h-[280px]">
                   {/* Scanning line effect behind image */}
                   <div className="absolute inset-0 bg-gradient-to-b from-transparent via-emerald-500/3 to-transparent animate-[pulse_3s_ease-in-out_infinite] pointer-events-none" />
 
@@ -320,7 +406,7 @@ export default function CustomizePage(): ReactElement {
                       </p>
                     </div>
                   )}
-                </div>
+                </InteractiveViewer>
               </div>
 
               <p className="mt-3 text-[11px] text-gray-500 dark:text-white/30 text-center">
@@ -338,6 +424,7 @@ export default function CustomizePage(): ReactElement {
               copied={copied}
               copyStatusMessage={copyStatusMessage}
               hasUsername={hasUsername}
+              username={trimmedUsername}
               onFormatChange={setExportFormat}
               onCopy={copyExportSnippet}
             />
@@ -358,7 +445,9 @@ export default function CustomizePage(): ReactElement {
                       >
                         <span className="text-purple-400">{decodeURIComponent(k)}</span>
                         <span className="text-gray-400 dark:text-white/20">=</span>
-                        <span className="text-emerald-400">{decodeURIComponent(v)}</span>
+                        <span className="text-emerald-600 dark:text-emerald-400">
+                          {decodeURIComponent(v)}
+                        </span>
                       </span>
                     );
                   }
