@@ -84,6 +84,38 @@ describe('rateLimit', () => {
   });
 });
 
+it('keys expire exactly at the window limit with sliding time advances', async () => {
+  vi.useFakeTimers();
+  const ip = '9.9.9.9';
+  const windowMs = 1000;
+  const limit = 5;
+
+  // First request: creates the tracker with 1s TTL
+  let res = await rateLimit(ip, limit, windowMs);
+  expect(res.success).toBe(true);
+  expect(res.remaining).toBe(limit - 1);
+
+  // Advance half the window and make another request
+  vi.advanceTimersByTime(500);
+  res = await rateLimit(ip, limit, windowMs);
+  expect(res.success).toBe(true);
+
+  // Advance to exactly the original window boundary (total = 1000ms)
+  vi.advanceTimersByTime(500);
+
+  // At the exact boundary the entry should still be considered valid
+  res = await rateLimit(ip, limit, windowMs);
+  expect(res.success).toBe(true);
+
+  // Move just past the window expiry
+  vi.advanceTimersByTime(1);
+
+  // Now the key must have expired and a fresh window starts
+  res = await rateLimit(ip, limit, windowMs);
+  expect(res.success).toBe(true);
+  expect(res.remaining).toBe(limit - 1);
+});
+
 it('allows requests after many expired IP entries', async () => {
   const windowMs = 1000;
 
