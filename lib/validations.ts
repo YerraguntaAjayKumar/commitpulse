@@ -76,7 +76,19 @@ const baseStreakParamsSchema = z.object({
       message: 'Invalid GitHub username',
     }),
 
-  theme: z.string().default('dark'),
+  theme: z
+    .string()
+    .optional()
+    .refine(
+      (val) => {
+        if (val === undefined || val === '') return true;
+        return val === 'auto' || val === 'random' || Object.hasOwn(themes, val);
+      },
+      {
+        message: `Invalid theme. Supported themes: ${['auto', 'random', ...Object.keys(themes)].join(', ')}`,
+      }
+    )
+    .default('dark'),
   bg: z
     .string()
     .optional()
@@ -261,6 +273,10 @@ const baseStreakParamsSchema = z.object({
   glow: z.string().optional().transform(toBooleanFlag).default(true),
   entrance: z.enum(['rise', 'fade', 'slide', 'none']).catch('rise').default('rise'),
 
+  // Output format: 'svg' (default) or 'json' for programmatic access.
+  // Invalid values silently fall back to 'svg'.
+  format: z.enum(['svg', 'json']).catch('svg').default('svg'),
+
   // layout parameter: strictly validated — unsupported values return a 400 Bad Request.
   layout: z
     .string()
@@ -426,8 +442,29 @@ export const wrappedParamsSchema = z.object({
   height: dimensionParam('height', 80, 800),
 });
 
+export const compareParamsSchema = z
+  .object({
+    user1: z
+      .string({ error: 'Missing user1 parameter' })
+      .trim()
+      .min(1, { message: 'user1 is required' })
+      .max(39, { message: 'GitHub username cannot exceed 39 characters' })
+      .regex(GITHUB_USERNAME_REGEX, { message: 'Invalid GitHub username for user1' }),
+    user2: z
+      .string({ error: 'Missing user2 parameter' })
+      .trim()
+      .min(1, { message: 'user2 is required' })
+      .max(39, { message: 'GitHub username cannot exceed 39 characters' })
+      .regex(GITHUB_USERNAME_REGEX, { message: 'Invalid GitHub username for user2' }),
+  })
+  .refine((data) => data.user1.toLowerCase() !== data.user2.toLowerCase(), {
+    message: 'Cannot compare a user with themselves.',
+    path: ['user2'],
+  });
+
 export type StreakParams = z.infer<typeof streakParamsSchema>;
 export type GithubParams = z.infer<typeof githubParamsSchema>;
 export type OgParams = z.infer<typeof ogParamsSchema>;
 export type StatsParams = z.infer<typeof statsParamsSchema>;
 export type WrappedParams = z.infer<typeof wrappedParamsSchema>;
+export type CompareParams = z.infer<typeof compareParamsSchema>;

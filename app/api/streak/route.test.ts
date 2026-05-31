@@ -724,12 +724,17 @@ describe('GET /api/streak', () => {
       expect(body).toContain('--cp-bg');
     });
 
-    it('falls back to the dark theme without crashing when an unknown theme is given', async () => {
-      const response = await GET(makeRequest({ user: 'octocat', theme: 'does-not-exist' }));
-      const body = await response.text();
+    it('returns 400 Bad Request listing allowed themes when an invalid theme is provided', async () => {
+      const response = await GET(makeRequest({ user: 'octocat', theme: 'nonexistent_theme_name' }));
+      expect(response.status).toBe(400);
 
-      expect(response.status).toBe(200);
-      expect(body).toContain('58a6ff');
+      const body = await response.json();
+      expect(body.error).toBe('Invalid parameters');
+      const fieldError = body.details.fieldErrors.theme[0];
+      expect(fieldError).toContain('Invalid theme. Supported themes:');
+      expect(fieldError).toContain('dark');
+      expect(fieldError).toContain('light');
+      expect(fieldError).toContain('neon');
     });
   });
 
@@ -1335,6 +1340,56 @@ describe('GET /api/streak', () => {
 
       const body = await response.text();
       expect(body).toContain('strictly for organizations');
+    });
+  });
+
+  describe('JSON output mode (format=json)', () => {
+    it('returns JSON with correct Content-Type when format=json is set', async () => {
+      const response = await GET(makeRequest({ user: 'octocat', format: 'json' }));
+      expect(response.status).toBe(200);
+      expect(response.headers.get('Content-Type')).toContain('application/json');
+    });
+
+    it('returns stats, monthlyStats, and calendar in JSON response', async () => {
+      const response = await GET(makeRequest({ user: 'octocat', format: 'json' }));
+      const data = await response.json();
+
+      expect(data.user).toBe('octocat');
+      expect(data.stats).toBeDefined();
+      expect(data.stats.currentStreak).toBeDefined();
+      expect(data.stats.longestStreak).toBeDefined();
+      expect(data.stats.totalContributions).toBeDefined();
+      expect(data.monthlyStats).toBeDefined();
+      expect(data.monthlyStats.currentMonthTotal).toBeDefined();
+      expect(data.calendar).toBeDefined();
+      expect(data.calendar.totalContributions).toBe(10);
+      expect(data.calendar.weeks).toHaveLength(2);
+    });
+
+    it('includes Cache-Control header in JSON response', async () => {
+      const response = await GET(makeRequest({ user: 'octocat', format: 'json' }));
+      expect(response.headers.get('Cache-Control')).toContain('s-maxage=');
+    });
+
+    it('includes X-Cache-Status header in JSON response', async () => {
+      const response = await GET(makeRequest({ user: 'octocat', format: 'json' }));
+      expect(response.headers.get('X-Cache-Status')).toBe('HIT');
+    });
+
+    it('returns SVG when format is not set (default)', async () => {
+      const response = await GET(makeRequest({ user: 'octocat' }));
+      expect(response.headers.get('Content-Type')).toBe('image/svg+xml');
+    });
+
+    it('falls back to SVG for invalid format values', async () => {
+      const response = await GET(makeRequest({ user: 'octocat', format: 'xml' }));
+      expect(response.headers.get('Content-Type')).toBe('image/svg+xml');
+    });
+
+    it('uses org name as user field when org parameter is provided', async () => {
+      const response = await GET(makeRequest({ user: 'octocat', org: 'github', format: 'json' }));
+      const data = await response.json();
+      expect(data.user).toBe('github');
     });
   });
 });

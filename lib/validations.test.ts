@@ -757,6 +757,24 @@ describe('ogParamsSchema', () => {
   });
 });
 
+describe('streakParamsSchema — theme validation', () => {
+  it('rejects an invalid theme value with 400 validation error listing allowed themes', () => {
+    const result = streakParamsSchema.safeParse({
+      user: 'octocat',
+      theme: 'nonexistent_theme_name',
+    });
+
+    expect(result.success).toBe(false);
+    if (!result.success) {
+      const fieldError = result.error.flatten().fieldErrors.theme?.[0];
+      expect(fieldError).toContain('Invalid theme. Supported themes:');
+      expect(fieldError).toContain('dark');
+      expect(fieldError).toContain('light');
+      expect(fieldError).toContain('neon');
+    }
+  });
+});
+
 describe('streakParamsSchema — view fallback behavior', () => {
   it('accepts "default" as a valid view value', () => {
     expect(parse({ view: 'default' }).view).toBe('default');

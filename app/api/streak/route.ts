@@ -94,6 +94,7 @@ export async function GET(request: Request) {
       tz: tzParam,
       disable_particles,
       glow,
+      format,
     } = parseResult.data;
 
     const themeName = theme || 'dark';
@@ -107,6 +108,8 @@ export async function GET(request: Request) {
       : year
         ? `${year}-12-31T23:59:59Z`
         : undefined;
+    const currentYear = new Date().getUTCFullYear();
+    const isHistoricalYear = !!year && Number(year) < currentYear;
 
     let timezone = 'UTC';
     if (tzParam) {
@@ -196,6 +199,42 @@ export async function GET(request: Request) {
       }
     }
 
+    // ─── JSON output mode ──────────────────────────────────────────────────
+    if (format === 'json') {
+      const stats = calculateStreak(calendar, timezone, undefined, grace);
+      const monthlyStats = calculateMonthlyStats(
+        calendar,
+        timezone,
+        getMonthlyReferenceDate(year, timezone)
+      );
+
+      const secondsToMidnight = tzParam
+        ? getSecondsUntilMidnightInTimezone(timezone)
+        : getSecondsUntilUTCMidnight();
+      const cacheControl = refresh
+        ? 'no-cache, no-store, must-revalidate'
+        : `public, s-maxage=${secondsToMidnight}, stale-while-revalidate=86400`;
+
+      return NextResponse.json(
+        {
+          user: targetEntity,
+          stats,
+          monthlyStats,
+          calendar: {
+            totalContributions: calendar.totalContributions,
+            weeks: calendar.weeks,
+          },
+        },
+        {
+          headers: {
+            'Cache-Control': cacheControl,
+            'X-Cache-Status': refresh ? `BYPASS, fetched=${new Date().toISOString()}` : 'HIT',
+          },
+        }
+      );
+    }
+
+    // ─── SVG output mode (default) ──────────────────────────────────────────
     let svg = '';
     if (view === 'monthly') {
       const stats = calculateMonthlyStats(
@@ -226,7 +265,9 @@ export async function GET(request: Request) {
       : getSecondsUntilUTCMidnight();
     const cacheControl = refresh
       ? 'no-cache, no-store, must-revalidate'
-      : `public, s-maxage=${secondsToMidnight}, stale-while-revalidate=86400`;
+      : isHistoricalYear
+        ? 'public, s-maxage=31536000, immutable'
+        : `public, s-maxage=${secondsToMidnight}, stale-while-revalidate=86400`;
 
     return new NextResponse(svg, {
       headers: {
