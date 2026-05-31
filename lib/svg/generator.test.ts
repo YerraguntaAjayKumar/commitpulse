@@ -506,7 +506,7 @@ describe('generateSVG', () => {
       );
 
       expect(svg).toContain(
-        "@import url('https://fonts.googleapis.com/css2?family=Inter&display=swap');"
+        "@import url('https://fonts.googleapis.com/css2?family=Inter&amp;display=swap');"
       );
       expect(svg).toContain('font-family: "Inter", sans-serif;');
     });
@@ -772,37 +772,35 @@ describe('generateSVG', () => {
   });
 
   describe('SVG dimensions per size', () => {
-    it('renders width="600" and height="420" for medium size (default)', () => {
+    it('renders responsive width="100%" for medium size (default)', () => {
       const svg = generateSVG(
         mockStats,
         { user: 'avi', size: 'medium' } as unknown as BadgeParams,
         mockCalendar
       );
-
-      expect(svg).toContain('width="600"');
-      expect(svg).toContain('height="420"');
+      expect(svg).toContain('width="100%"');
+      // viewBox should still carry the correct pixel dimensions
+      expect(svg).toContain('viewBox="0 0 600 420"');
     });
 
-    it('renders width="400" and height="280" for small size', () => {
+    it('renders responsive width="100%" for small size with correct viewBox', () => {
       const svg = generateSVG(
         mockStats,
         { user: 'avi', size: 'small' } as unknown as BadgeParams,
         mockCalendar
       );
-
-      expect(svg).toContain('width="400"');
-      expect(svg).toContain('height="280"');
+      expect(svg).toContain('width="100%"');
+      expect(svg).toContain('viewBox="0 0 400 280"');
     });
 
-    it('renders width="800" and height="560" for large size', () => {
+    it('renders responsive width="100%" for large size with correct viewBox', () => {
       const svg = generateSVG(
         mockStats,
         { user: 'avi', size: 'large' } as unknown as BadgeParams,
         mockCalendar
       );
-
-      expect(svg).toContain('width="800"');
-      expect(svg).toContain('height="560"');
+      expect(svg).toContain('width="100%"');
+      expect(svg).toContain('viewBox="0 0 800 560"');
     });
   });
 
@@ -905,6 +903,37 @@ describe('generateMonthlySVG', () => {
     expect(svg).toContain('-12 commits');
   });
 
+  it('resolves high-contrast negative delta colors based on theme and luminance', () => {
+    const negativeStats: MonthlyStats = {
+      currentMonthTotal: 18,
+      previousMonthTotal: 30,
+      deltaPercentage: -40,
+      deltaAbsolute: -12,
+      currentMonthName: 'June',
+    };
+
+    // 1. Default dark theme (bg: '0d1117') should resolve to high-contrast red '#f85149'
+    const svgDefault = generateMonthlySVG(negativeStats, {
+      user: 'octocat',
+      bg: '0d1117',
+    } as unknown as BadgeParams);
+    expect(svgDefault).toContain('fill: #f85149');
+
+    // 2. Custom light background (bg: 'ffffff') should resolve to light-mode red '#cf222e'
+    const svgLight = generateMonthlySVG(negativeStats, {
+      user: 'octocat',
+      bg: 'ffffff',
+    } as unknown as BadgeParams);
+    expect(svgLight).toContain('fill: #cf222e');
+
+    // 3. Rose theme background (bg: '1f0d14') should resolve to custom rose negative color '#ff4b72'
+    const svgRose = generateMonthlySVG(negativeStats, {
+      user: 'octocat',
+      bg: '1f0d14',
+    } as unknown as BadgeParams);
+    expect(svgRose).toContain('fill: #ff4b72');
+  });
+
   it('renders monthly stats correctly with percentage delta', () => {
     const svg = generateMonthlySVG(mockMonthlyStats, {
       user: 'octocat',
@@ -940,7 +969,6 @@ describe('generateMonthlySVG', () => {
     expect(svg).toContain('width="400"');
     expect(svg).toContain('height="200"');
   });
-
   it('includes prefers-reduced-motion media query in static monthly SVG output', () => {
     const svg = generateMonthlySVG(mockMonthlyStats, {
       user: 'octocat',
@@ -962,6 +990,17 @@ describe('generateMonthlySVG', () => {
     expect(svg).toContain('transition: none !important');
   });
 
+  it('includes CSS variables in auto-theme monthly SVG', () => {
+    const svg = generateMonthlySVG(mockMonthlyStats, {
+      user: 'octocat',
+      autoTheme: true,
+    } as unknown as BadgeParams);
+
+    expect(svg).toContain('--cp-bg');
+    expect(svg).toContain('--cp-accent');
+    expect(svg).toContain('prefers-color-scheme: dark');
+  });
+
   it('supports dynamic Google Fonts for non-predefined fonts in monthly auto-theme mode', () => {
     const svg = generateMonthlySVG(mockMonthlyStats, {
       user: 'octocat',
@@ -970,7 +1009,7 @@ describe('generateMonthlySVG', () => {
     } as unknown as BadgeParams);
 
     expect(svg).toContain(
-      "@import url('https://fonts.googleapis.com/css2?family=Inter&display=swap');"
+      "@import url('https://fonts.googleapis.com/css2?family=Inter&amp;display=swap');"
     );
     expect(svg).toContain('font-family: "Inter", sans-serif;');
   });
@@ -1103,7 +1142,7 @@ describe('shading', () => {
       shadingCalendar
     );
     // The shaded SVG should still contain the tower paths
-    expect(svgShading).toContain('class="cp-tower"');
+    expect(svgShading).toContain('class="cp-tower interactive-tower"');
     // For level 1 (mult=0.4), base top face opacity 0.7 becomes 0.28
     // Check for that specific derived value to ensure shading actually multiplied it.
     expect(svgShading).toContain('fill-opacity="0.28"');
@@ -1358,5 +1397,54 @@ describe('Radar Scan Line Animation Alignment', () => {
     expect(svg).toContain('text-anchor="middle"');
     expect(svg).toContain('width="600"');
     expect(svg).toContain('height="420"');
+  });
+
+  it('safely truncates usernames longer than 30 chars with trailing dots without changing CSS geometry', () => {
+    // 1. Arrange: Create usernames (one short baseline, one strictly > 30 chars)
+    const shortUsername = 'avi';
+    const longUsername = 'ThisIsAVeryLongUsernameThatExceedsThirtyCharacters';
+    const expectedTruncated = longUsername.slice(0, 12) + '...';
+
+    const paramsBaseline = {
+      user: shortUsername,
+      size: 'medium',
+      autoTheme: false,
+    } as unknown as BadgeParams;
+    const paramsLong = {
+      user: longUsername,
+      size: 'medium',
+      autoTheme: false,
+    } as unknown as BadgeParams;
+
+    // 2. Act: Truncate username and generate SVGs
+    const truncatedName = truncateUsername(longUsername);
+    const svgBaseline = generateSVG(mockStats, paramsBaseline, mockCalendar);
+    const svgLong = generateSVG(mockStats, paramsLong, mockCalendar);
+
+    // Helper to extract critical SVG geometry attributes
+    const extractGeometry = (svgStr: string) => {
+      const width = svgStr.match(/width="([^"]*)"/)?.[1];
+      const height = svgStr.match(/height="([^"]*)"/)?.[1];
+      const viewBox = svgStr.match(/viewBox="([^"]*)"/)?.[1];
+      return { width, height, viewBox };
+    };
+
+    // 3. Assertions:
+
+    // A. Verify exact expected truncation value on the helper utility
+    expect(truncatedName).toBe(expectedTruncated);
+
+    // B. Verify the visible <text class="title"> tag contains exactly the truncated name and NOT the full username
+    const textTitleMatch = svgLong.match(/<text[^>]*class="title"[^>]*>([^<]*)<\/text>/);
+    expect(textTitleMatch).not.toBeNull();
+    const renderedTitleText = textTitleMatch?.[1];
+
+    expect(renderedTitleText).toBe(expectedTruncated.toUpperCase());
+    expect(renderedTitleText).not.toContain(longUsername.toUpperCase());
+
+    // C. Verify geometry remains completely unchanged compared to the baseline
+    const geometryBaseline = extractGeometry(svgBaseline);
+    const geometryLong = extractGeometry(svgLong);
+    expect(geometryLong).toEqual(geometryBaseline);
   });
 });

@@ -167,13 +167,16 @@ describe('fetchGitHubContributions', () => {
       mockResponse({
         data: {
           user: {
-            contributionsCollection: { contributionCalendar: mockCalendar },
+            contributionsCollection: {
+              contributionCalendar: mockCalendar,
+              commitContributionsByRepository: [],
+            },
           },
         },
       })
     );
 
-    const result = await fetchGitHubContributions('octocat');
+    const { calendar: result } = await fetchGitHubContributions('octocat');
 
     expect(result.totalContributions).toBe(mockCalendar.totalContributions);
     expect(result.weeks[0].contributionDays[0].contributionCount).toBe(3);
@@ -184,7 +187,10 @@ describe('fetchGitHubContributions', () => {
       mockResponse({
         data: {
           user: {
-            contributionsCollection: { contributionCalendar: mockCalendar },
+            contributionsCollection: {
+              contributionCalendar: mockCalendar,
+              commitContributionsByRepository: [],
+            },
           },
         },
       })
@@ -214,7 +220,10 @@ describe('fetchGitHubContributions', () => {
       mockResponse({
         data: {
           user: {
-            contributionsCollection: { contributionCalendar: mockCalendar },
+            contributionsCollection: {
+              contributionCalendar: mockCalendar,
+              commitContributionsByRepository: [],
+            },
           },
         },
       })
@@ -254,7 +263,7 @@ describe('fetchGitHubContributions', () => {
       })
     );
 
-    const result = await fetchGitHubContributions('new-user');
+    const { calendar: result } = await fetchGitHubContributions('new-user');
 
     expect(result.totalContributions).toBe(0);
     expect(result.weeks).toHaveLength(0);
@@ -317,6 +326,52 @@ describe('fetchGitHubContributions', () => {
     );
   });
 
+  // GitHub GraphQL returns HTTP 200 for rate limit errors — the error lives in the body.
+  // fetchGraphQLWithRetry must detect it and back off, not crash immediately.
+  describe('body-level RATE_LIMITED retry (HTTP 200)', () => {
+    beforeEach(() => {
+      vi.useFakeTimers();
+    });
+
+    afterEach(() => {
+      vi.useRealTimers();
+    });
+
+    it('retries with backoff when GitHub returns RATE_LIMITED inside a 200 OK body', async () => {
+      vi.mocked(fetch)
+        .mockResolvedValueOnce(
+          mockResponse({ errors: [{ type: 'RATE_LIMITED', message: 'API rate limit exceeded' }] })
+        )
+        .mockResolvedValueOnce(
+          mockResponse({
+            data: { user: { contributionsCollection: { contributionCalendar: mockCalendar } } },
+          })
+        );
+
+      const promise = fetchGitHubContributions('octocat');
+      await vi.advanceTimersByTimeAsync(500);
+      const { calendar: result } = await promise;
+
+      expect(fetch).toHaveBeenCalledTimes(2);
+      expect(result.totalContributions).toBe(mockCalendar.totalContributions);
+    });
+
+    it('throws after exhausting all retries on repeated body-level RATE_LIMITED errors', async () => {
+      vi.mocked(fetch).mockResolvedValue(
+        mockResponse({ errors: [{ type: 'RATE_LIMITED', message: 'API rate limit exceeded' }] })
+      );
+
+      const promise = fetchGitHubContributions('octocat');
+      // Register the rejection handler before advancing timers so the rejection
+      // is never "unhandled" during the timer callbacks.
+      const assertion = expect(promise).rejects.toThrow('API Rate Limit Exceeded');
+      // 500ms + 1000ms + 2000ms covers all 3 retry delays before attempt >= MAX_RETRIES
+      await vi.advanceTimersByTimeAsync(3500);
+      await assertion;
+      expect(fetch).toHaveBeenCalledTimes(4);
+    });
+  });
+
   it('throws a descriptive "user not found" error when the username does not exist on GitHub', async () => {
     vi.mocked(fetch).mockResolvedValue(mockResponse({ data: { user: null } }));
 
@@ -347,7 +402,7 @@ describe('fetchGitHubContributions', () => {
       })
     );
 
-    const result = await fetchGitHubContributions('sparse-user');
+    const { calendar: result } = await fetchGitHubContributions('sparse-user');
     expect(result.totalContributions).toBe(0);
     expect(result.weeks).toHaveLength(1);
   });
@@ -374,8 +429,8 @@ describe('fetchGitHubContributions', () => {
     const r2 = await fetchGitHubContributions('empty-user', {
       bypassCache: true,
     });
-    expect(r1.totalContributions).toBe(r2.totalContributions);
-    expect(r1.weeks).toEqual(r2.weeks);
+    expect(r1.calendar.totalContributions).toBe(r2.calendar.totalContributions);
+    expect(r1.calendar.weeks).toEqual(r2.calendar.weeks);
   });
 });
 
@@ -659,7 +714,19 @@ describe('getFullDashboardData', () => {
       return mockResponse({
         data: {
           user: {
-            contributionsCollection: { contributionCalendar: mockCalendar },
+            contributionsCollection: {
+              contributionCalendar: mockCalendar,
+              commitContributionsByRepository: [
+                {
+                  repository: { primaryLanguage: { name: 'TypeScript' } },
+                  contributions: { totalCount: 200 },
+                },
+                {
+                  repository: { primaryLanguage: { name: 'Rust' } },
+                  contributions: { totalCount: 100 },
+                },
+              ],
+            },
           },
         },
       });
@@ -738,7 +805,10 @@ describe('getFullDashboardData', () => {
       return mockResponse({
         data: {
           user: {
-            contributionsCollection: { contributionCalendar: mockCalendar },
+            contributionsCollection: {
+              contributionCalendar: mockCalendar,
+              commitContributionsByRepository: [],
+            },
           },
         },
       });
@@ -767,7 +837,10 @@ describe('getFullDashboardData', () => {
       return mockResponse({
         data: {
           user: {
-            contributionsCollection: { contributionCalendar: mockCalendar },
+            contributionsCollection: {
+              contributionCalendar: mockCalendar,
+              commitContributionsByRepository: [],
+            },
           },
         },
       });
@@ -837,7 +910,10 @@ describe('GitHub API cache behavior', () => {
       mockResponse({
         data: {
           user: {
-            contributionsCollection: { contributionCalendar: mockCalendar },
+            contributionsCollection: {
+              contributionCalendar: mockCalendar,
+              commitContributionsByRepository: [],
+            },
           },
         },
       })
@@ -870,14 +946,17 @@ describe('GitHub API cache behavior', () => {
       mockResponse({
         data: {
           user: {
-            contributionsCollection: { contributionCalendar: mockCalendar },
+            contributionsCollection: {
+              contributionCalendar: mockCalendar,
+              commitContributionsByRepository: [],
+            },
           },
         },
       })
     );
 
     const results = await requests;
-    expect(results.map((result) => result.totalContributions)).toEqual([42, 42, 42]);
+    expect(results.map((result) => result.calendar.totalContributions)).toEqual([42, 42, 42]);
   });
 
   it('dedupes rapid synchronous contribution requests until the delayed fetch resolves once', async () => {
@@ -921,7 +1000,7 @@ describe('GitHub API cache behavior', () => {
     const results = await Promise.all(requests);
 
     expect(resolveFetchSpy).toHaveBeenCalledTimes(1);
-    expect(results.map((result) => result.totalContributions)).toEqual([42, 42, 42]);
+    expect(results.map((result) => result.calendar.totalContributions)).toEqual([42, 42, 42]);
   });
 
   it('refresh bypass: bypassCache=true forces a fresh fetch', async () => {
@@ -929,7 +1008,10 @@ describe('GitHub API cache behavior', () => {
       mockResponse({
         data: {
           user: {
-            contributionsCollection: { contributionCalendar: mockCalendar },
+            contributionsCollection: {
+              contributionCalendar: mockCalendar,
+              commitContributionsByRepository: [],
+            },
           },
         },
       })
@@ -941,7 +1023,7 @@ describe('GitHub API cache behavior', () => {
     expect(fetch).toHaveBeenCalledTimes(2);
   });
 
-  it('cache expiry: expired entry triggers a new fetch', async () => {
+  it('cache expiry: expired entry triggers a delta sync fetch', async () => {
     vi.useFakeTimers();
     vi.setSystemTime(new Date('2026-01-01T00:00:00.000Z'));
 
@@ -949,7 +1031,10 @@ describe('GitHub API cache behavior', () => {
       mockResponse({
         data: {
           user: {
-            contributionsCollection: { contributionCalendar: mockCalendar },
+            contributionsCollection: {
+              contributionCalendar: mockCalendar,
+              commitContributionsByRepository: [],
+            },
           },
         },
       })
@@ -961,6 +1046,14 @@ describe('GitHub API cache behavior', () => {
     await fetchGitHubContributions('octocat');
 
     expect(fetch).toHaveBeenCalledTimes(2);
+
+    const secondCallBody = JSON.parse(vi.mocked(fetch).mock.calls[1][1]!.body as string);
+    expect(secondCallBody.variables.from).toBeDefined();
+
+    // Delta sync subtracts 1 day from the last synced date (which was 2026-01-01)
+    const expectedFrom = new Date('2026-01-01T00:00:00.000Z');
+    expectedFrom.setUTCDate(expectedFrom.getUTCDate() - 1);
+    expect(secondCallBody.variables.from).toBe(expectedFrom.toISOString());
   });
 
   it('cache hit: second profile call uses cached value', async () => {
@@ -1225,6 +1318,15 @@ describe('buildCommitClock', () => {
     expect(result.every((item) => item.commits === 0)).toBe(true);
   });
 
+  it('returns defined dashboard analytics rows when user metric logs are empty', () => {
+    const result = buildCommitClock([]);
+
+    expect(result).toHaveLength(7);
+    expect(result.every((item) => typeof item.day === 'string')).toBe(true);
+    expect(result.every((item) => typeof item.commits === 'number')).toBe(true);
+    expect(result.every((item) => item.commits === 0)).toBe(true);
+  });
+
   it('always returns exactly 7 items', () => {
     const result = buildCommitClock([{ date: '2024-01-07', contributionCount: 1 }]);
 
@@ -1309,7 +1411,10 @@ describe('getOrgDashboardData', () => {
       return mockResponse({
         data: {
           user: {
-            contributionsCollection: { contributionCalendar: mockCalendar },
+            contributionsCollection: {
+              contributionCalendar: mockCalendar,
+              commitContributionsByRepository: [],
+            },
           },
         },
       });
