@@ -15,10 +15,34 @@ import {
   getGradientCoordinates,
 } from './sanitizer';
 
-import { SVG_WIDTH, SVG_HEIGHT } from './generatorConstants';
-import { FONT_MAP, resolveFont } from './fonts';
+import { GRID_ORIGIN_X, GRID_ORIGIN_Y, TILE_HEIGHT_HALF, TILE_WIDTH_HALF } from './layoutConstants';
 
-export { FONT_MAP, resolveFont } from './fonts';
+import { SVG_WIDTH, SVG_HEIGHT } from './generatorConstants';
+
+const FONT_MAP = {
+  inter: '"Inter", sans-serif',
+  roboto: '"Roboto", sans-serif',
+  jetbrains: '"JetBrains Mono", monospace',
+  fira: '"Fira Code", monospace',
+  syncopate: '"Syncopate", sans-serif',
+  space: '"Space Grotesk", sans-serif',
+} as const;
+
+export function resolveFont(sanitizedFont?: string | null): string | null {
+  if (!sanitizedFont) return null;
+
+  return (
+    FONT_MAP[sanitizedFont.toLowerCase() as keyof typeof FONT_MAP] ??
+    `"${sanitizedFont}", sans-serif`
+  );
+}
+
+function isBundledFont(sanitizedFont?: string | null): boolean {
+  if (!sanitizedFont) return false;
+
+  const fontKey = sanitizedFont.toLowerCase() as keyof typeof FONT_MAP;
+  return fontKey in FONT_MAP && fontKey !== 'inter';
+}
 
 // helpers
 export function getSizeScale(size?: 'small' | 'medium' | 'large') {
@@ -550,11 +574,7 @@ const MONTH_NAMES = [
   'Dec',
 ];
 
-// Layout constants for 3D isometric grid positioning to avoid magic numbers
-const GRID_ORIGIN_X = 300;
-const GRID_ORIGIN_Y = 120;
-const TILE_WIDTH_HALF = 16;
-const TILE_HEIGHT_HALF = 9;
+// Layout constants for 3D isometric label positioning
 const ISOMETRIC_VERTICAL_OFFSET = 20;
 
 const MONTH_LABEL_ROW_OFFSET = 7.2;
@@ -644,9 +664,7 @@ export function generateSVG(
 
   const sanitizedFont = sanitizeFont(params.font);
   const selectedFont = resolveFont(sanitizedFont);
-  const isPredefinedFont = sanitizedFont
-    ? Boolean(FONT_MAP[sanitizedFont.toLowerCase() as keyof typeof FONT_MAP])
-    : false;
+  const isPredefinedFont = isBundledFont(sanitizedFont);
   const statsFont = selectedFont || '"Space Grotesk", sans-serif';
   const googleFontUrlPart =
     sanitizedFont && !isPredefinedFont ? sanitizeGoogleFontUrl(sanitizedFont) : null;
@@ -810,9 +828,7 @@ export function generateMonthlySVG(stats: MonthlyStats, params: BadgeParams): st
 
   const sanitizedFont = sanitizeFont(params.font);
   const selectedFont = resolveFont(sanitizedFont);
-  const isPredefinedFont = sanitizedFont
-    ? Boolean(FONT_MAP[sanitizedFont.toLowerCase() as keyof typeof FONT_MAP])
-    : false;
+  const isPredefinedFont = isBundledFont(sanitizedFont);
   const statsFont = selectedFont || '"Space Grotesk", sans-serif';
   const radius = sanitizeRadius(params.radius, 8);
   const labels = getLabels(params.lang);
@@ -933,9 +949,7 @@ export function generateWrappedSVG(
 
   const sanitizedFont = sanitizeFont(params.font);
   const selectedFont = resolveFont(sanitizedFont);
-  const isPredefinedFont = sanitizedFont
-    ? Boolean(FONT_MAP[sanitizedFont.toLowerCase() as keyof typeof FONT_MAP])
-    : false;
+  const isPredefinedFont = isBundledFont(sanitizedFont);
   const statsFont = selectedFont || '"Space Grotesk", sans-serif';
   const radius = sanitizeRadius(params.radius, 8);
 
@@ -1467,9 +1481,7 @@ export function generateHeatmapSVG(
 
   const sanitizedFont = sanitizeFont(params.font);
   const selectedFont = resolveFont(sanitizedFont);
-  const isPredefinedFont = sanitizedFont
-    ? Boolean(FONT_MAP[sanitizedFont.toLowerCase() as keyof typeof FONT_MAP])
-    : false;
+  const isPredefinedFont = isBundledFont(sanitizedFont);
   const statsFont = selectedFont || '"Space Grotesk", sans-serif';
   const googleFontUrlPart =
     sanitizedFont && !isPredefinedFont ? sanitizeGoogleFontUrl(sanitizedFont) : null;
@@ -1938,9 +1950,7 @@ export function generateVersusSVG(
 
   const sanitizedFont = sanitizeFont(params.font);
   const selectedFont = resolveFont(sanitizedFont);
-  const isPredefinedFont = sanitizedFont
-    ? Boolean(FONT_MAP[sanitizedFont.toLowerCase() as keyof typeof FONT_MAP])
-    : false;
+  const isPredefinedFont = isBundledFont(sanitizedFont);
   const statsFont = selectedFont || '"Space Grotesk", sans-serif';
   const googleFontUrlPart =
     sanitizedFont && !isPredefinedFont ? sanitizeGoogleFontUrl(sanitizedFont) : null;
@@ -2192,15 +2202,8 @@ export function generatePulseSVG(
   const text = `#${sanitizeHexColor(params.text, 'ffffff')}`;
 
   const sanitizedFont = sanitizeFont(params.font);
-  const predefinedFont = sanitizedFont
-    ? (FONT_MAP[sanitizedFont.toLowerCase() as keyof typeof FONT_MAP] ?? null)
-    : null;
-  const isPredefinedFont = Boolean(predefinedFont);
-  const selectedFont = isPredefinedFont
-    ? predefinedFont
-    : sanitizedFont
-      ? `"${sanitizedFont}", sans-serif`
-      : null;
+  const selectedFont = resolveFont(sanitizedFont);
+  const isPredefinedFont = isBundledFont(sanitizedFont);
 
   const statsFont = selectedFont || '"Space Grotesk", sans-serif';
   const parsedRadius = Number(params.radius);
@@ -2209,7 +2212,7 @@ export function generatePulseSVG(
   const googleFontUrlPart =
     sanitizedFont && !isPredefinedFont ? sanitizeGoogleFontUrl(sanitizedFont) : null;
   const googleFontsImport = googleFontUrlPart
-    ? `@import url('https://fonts.googleapis.com/css2?family=${googleFontUrlPart}&display=swap');`
+    ? `@import url('https://fonts.googleapis.com/css2?family=${googleFontUrlPart}&amp;display=swap');`
     : '';
 
   const width = params.width || 800;
@@ -2379,15 +2382,8 @@ function generateAutoThemePulseSVG(
   const safeUser = escapeXML(params.user || 'GitHub User');
 
   const sanitizedFont = sanitizeFont(params.font);
-  const predefinedFont = sanitizedFont
-    ? (FONT_MAP[sanitizedFont.toLowerCase() as keyof typeof FONT_MAP] ?? null)
-    : null;
-  const isPredefinedFont = Boolean(predefinedFont);
-  const selectedFont = isPredefinedFont
-    ? predefinedFont
-    : sanitizedFont
-      ? `"${sanitizedFont}", sans-serif`
-      : null;
+  const selectedFont = resolveFont(sanitizedFont);
+  const isPredefinedFont = isBundledFont(sanitizedFont);
 
   const statsFont = selectedFont || '"Space Grotesk", sans-serif';
   const parsedRadius = Number(params.radius);
