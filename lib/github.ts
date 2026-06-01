@@ -11,6 +11,7 @@ import { calculateStreak, aggregateCalendars } from '@/lib/calculate';
 import { DistributedCache } from '@/lib/cache';
 import { LANGUAGE_COLORS } from '@/lib/svg/languageColors';
 import { CONTRIBUTION_MILESTONES, STREAK_MILESTONES } from './svg/constants';
+import { quotaMonitor } from '@/services/github/quota-monitor';
 
 import 'server-only';
 
@@ -87,6 +88,12 @@ export async function fetchWithRetry(
   }
 
   if (!res) throw new Error('GitHub API request failed without a response');
+
+  try {
+    quotaMonitor.updateQuotaFromHeaders(res.headers);
+  } catch (err) {
+    console.error('Failed to update quota monitor', err);
+  }
 
   // Check for rate limit headers
   const retryAfter = res.headers.get('retry-after');
@@ -1154,6 +1161,7 @@ export async function getFullDashboardData(username: string, options: FetchOptio
     ),
     commitClock,
     graphData: { nodes, links },
+    lastSyncedAt: calendarData.lastSyncedAt,
   };
 }
 
