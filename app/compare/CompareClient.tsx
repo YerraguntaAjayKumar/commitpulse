@@ -43,6 +43,8 @@ import {
   Tent,
   Camera,
 } from 'lucide-react';
+import html2canvas from 'html2canvas';
+import { validateGitHubUsername } from '@/lib/validations';
 import { toPng } from 'html-to-image';
 
 /* ── types ────────────────────────────────────────────────────────────── */
@@ -890,6 +892,8 @@ export default function CompareClient() {
   const [user1, setUser1] = useState(searchParams.get('user1') || '');
   const [user2, setUser2] = useState(searchParams.get('user2') || '');
   const [error, setError] = useState('');
+  const [user1Error, setUser1Error] = useState('');
+  const [user2Error, setUser2Error] = useState('');
   const [loading, setLoading] = useState(false);
   const [data, setData] = useState<CompareResponse | null>(null);
   const [isExporting, setIsExporting] = useState(false);
@@ -967,23 +971,47 @@ export default function CompareClient() {
 
   const handleCompare = useCallback(
     async (u1: string, u2: string) => {
-      if (!u1.trim() || !u2.trim()) {
+      const trimmedUser1 = u1.trim();
+      const trimmedUser2 = u2.trim();
+
+      setError('');
+      setUser1Error('');
+      setUser2Error('');
+
+      if (!trimmedUser1 || !trimmedUser2) {
         setError('Please enter both usernames.');
         return;
       }
+
+      let hasValidationError = false;
+
+      if (!validateGitHubUsername(trimmedUser1)) {
+        setUser1Error('Invalid GitHub username.');
+        hasValidationError = true;
+      }
+
+      if (!validateGitHubUsername(trimmedUser2)) {
+        setUser2Error('Invalid GitHub username.');
+        hasValidationError = true;
+      }
+
+      if (hasValidationError) {
+        return;
+      }
+
       setLoading(true);
-      setError('');
       setData(null);
 
-      // Update URL for shareability
-      router.replace(`/compare?user1=${encodeURIComponent(u1)}&user2=${encodeURIComponent(u2)}`, {
-        scroll: false,
-      });
+      router.replace(
+        `/compare?user1=${encodeURIComponent(trimmedUser1)}&user2=${encodeURIComponent(trimmedUser2)}`,
+        { scroll: false }
+      );
 
       try {
         const res = await fetch(
-          `/api/compare?user1=${encodeURIComponent(u1)}&user2=${encodeURIComponent(u2)}`
+          `/api/compare?user1=${encodeURIComponent(trimmedUser1)}&user2=${encodeURIComponent(trimmedUser2)}`
         );
+
         const json = await res.json();
 
         if (!res.ok) {
@@ -1088,10 +1116,17 @@ export default function CompareClient() {
                   placeholder="GitHub username #1"
                   aria-label="Enter first GitHub username to compare"
                   value={user1}
-                  onChange={(e) => setUser1(e.target.value)}
+                  onChange={(e) => {
+                    setUser1(e.target.value);
+                    setUser1Error('');
+                  }}
                   onKeyDown={(e) => e.key === 'Enter' && handleCompare(user1, user2)}
                   className="w-full pl-10 pr-4 py-3 rounded-xl border border-black/10 dark:border-[rgba(255,255,255,0.1)] bg-white dark:bg-[#0a0a0a] text-gray-900 dark:text-white text-sm placeholder:text-[#A1A1AA] focus:outline-none focus:border-emerald-500/50 transition-colors"
                 />
+
+                {user1Error && (
+                  <p className="absolute left-0 top-full mt-1 text-xs text-red-500">{user1Error}</p>
+                )}
               </div>
 
               <div className="flex items-center justify-center">
@@ -1109,10 +1144,17 @@ export default function CompareClient() {
                   placeholder="GitHub username #2"
                   aria-label="Enter second GitHub username to compare"
                   value={user2}
-                  onChange={(e) => setUser2(e.target.value)}
+                  onChange={(e) => {
+                    setUser2(e.target.value);
+                    setUser2Error('');
+                  }}
                   onKeyDown={(e) => e.key === 'Enter' && handleCompare(user1, user2)}
                   className="w-full pl-10 pr-4 py-3 rounded-xl border border-black/10 dark:border-[rgba(255,255,255,0.1)] bg-white dark:bg-[#0a0a0a] text-gray-900 dark:text-white text-sm placeholder:text-[#A1A1AA] focus:outline-none focus:border-emerald-500/50 transition-colors"
                 />
+
+                {user2Error && (
+                  <p className="absolute left-0 top-full mt-1 text-xs text-red-500">{user2Error}</p>
+                )}
               </div>
 
               <motion.button

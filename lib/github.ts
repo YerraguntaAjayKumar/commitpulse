@@ -1,6 +1,7 @@
 import type {
   ContributionCalendar,
   ContributionDay,
+  ContributedRepo,
   ExtendedContributionData,
   RepoContribution,
   GraphNode,
@@ -223,6 +224,38 @@ export async function fetchWithRetry(
   return fetchWithRetry(url, options, attempt + 1, timeoutMs);
 }
 
+const GRAPHQL_INJECTION_PATTERNS: RegExp[] = [
+  /;\s*DROP/i,
+  /;\s*DELETE/i,
+  /;\s*TRUNCATE/i,
+  /union\s+select/i,
+  /exec\s*\(/i,
+];
+
+function assertValidGraphQLBody(options: RequestInit): void {
+  if (typeof options.body !== 'string') return;
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(options.body);
+  } catch {
+    throw new Error('GraphQL request body is not valid JSON');
+  }
+  const query = (parsed as Record<string, unknown>)?.query;
+  if (typeof query !== 'string' || query.trim() === '') {
+    throw new Error('GraphQL request must include a non-empty query string');
+  }
+  for (const pattern of GRAPHQL_INJECTION_PATTERNS) {
+    if (pattern.test(query)) {
+      throw new Error('GraphQL query contains disallowed patterns');
+    }
+  }
+  const open = (query.match(/{/g) ?? []).length;
+  const close = (query.match(/}/g) ?? []).length;
+  if (open === 0 || open !== close) {
+    throw new Error('GraphQL query has unbalanced braces');
+  }
+}
+
 // Wraps fetchWithRetry to also retry on GraphQL-level RATE_LIMITED errors
 // that GitHub returns with HTTP 200 OK instead of 429.
 async function fetchGraphQLWithRetry(
@@ -231,6 +264,7 @@ async function fetchGraphQLWithRetry(
   attempt = 0,
   timeoutMs?: number
 ): Promise<Response> {
+  if (attempt === 0) assertValidGraphQLBody(options);
   const res = await fetchWithRetry(url, options, attempt, timeoutMs);
   if (!res.ok || attempt >= MAX_RETRIES) return res;
 
@@ -369,7 +403,7 @@ export const GITHUB_CACHE_TTL_MS = 5 * 60 * 1000;
 export const contributionsCache = new DistributedCache<ExtendedContributionData>(1000);
 const profileCache = new DistributedCache<GitHubUserProfile>(1000);
 const reposCache = new DistributedCache<GitHubRepo[]>(500);
-const contributedReposCache = new DistributedCache<Record<string, unknown>[]>(500);
+const contributedReposCache = new DistributedCache<ContributedRepo[]>(500);
 
 interface GitHubUserProfile {
   login: string;
@@ -684,33 +718,9 @@ async function fetchContributionsUncached(
   const totalPRs = data.data.user.contributionsCollection?.totalPullRequestContributions || 0;
   const totalIssues = data.data.user.contributionsCollection?.totalIssueContributions || 0;
 
-  // Inject deterministic Lines of Code (LoC) approximation
-  calendar.weeks.forEach((week) => {
-    week.contributionDays.forEach((day) => {
-      if (day.contributionCount > 0) {
-        let hash1 = 2166136261,
-          hash2 = 2166136261;
-        const seed1 = day.date + 'add',
-          seed2 = day.date + 'del';
-        for (let i = 0; i < seed1.length; i++) {
-          hash1 ^= seed1.charCodeAt(i);
-          hash1 = Math.imul(hash1, 16777619);
-        }
-        for (let i = 0; i < seed2.length; i++) {
-          hash2 ^= seed2.charCodeAt(i);
-          hash2 = Math.imul(hash2, 16777619);
-        }
-        const randAdd = (hash1 >>> 0) / 4294967296;
-        const randDel = (hash2 >>> 0) / 4294967296;
-
-        day.locAdditions = Math.floor(day.contributionCount * (25 + randAdd * 85));
-        day.locDeletions = Math.floor(day.contributionCount * (5 + randDel * 35));
-      } else {
-        day.locAdditions = 0;
-        day.locDeletions = 0;
-      }
-    });
-  });
+  // Do not fabricate Lines of Code metrics.
+  // GitHub's contribution calendar API does not expose per-day additions/deletions here,
+  // so LOC fields are intentionally left undefined instead of showing misleading values.
 
   calendar.lastSyncedAt = new Date().toISOString();
 
@@ -1134,12 +1144,16 @@ export function buildInsights(
   return insights;
 }
 
-export function buildCommitClock(allDays: ContributionDay[]) {
+export function buildCommitClock(allDays: ContributionDay[], timezone: string = 'UTC') {
   const dayNames = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
   const dayTotals = new Array(7).fill(0);
   for (const day of allDays) {
-    const dow = new Date(day.date).getUTCDay();
-    dayTotals[dow] += day.contributionCount;
+    const dowStr = new Intl.DateTimeFormat('en-US', {
+      timeZone: timezone,
+      weekday: 'short',
+    }).format(new Date(day.date + 'T12:00:00Z'));
+    const dowIndex = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].indexOf(dowStr);
+    if (dowIndex !== -1) dayTotals[dowIndex] += day.contributionCount;
   }
   return dayNames.map((name, i) => ({ day: name, commits: dayTotals[i] }));
 }
@@ -1147,7 +1161,7 @@ export function buildCommitClock(allDays: ContributionDay[]) {
 export async function fetchContributedRepos(
   username: string,
   options: FetchOptions = {}
-): Promise<Record<string, unknown>[]> {
+): Promise<ContributedRepo[]> {
   const key = cacheKey('repos:contributed', username);
 
   const load = async () => {
@@ -1490,20 +1504,12 @@ export async function getFullDashboardData(username: string, options: FetchOptio
     });
     links.push({ source: profileData.login, target: r.name });
   });
-  contributedRepos.forEach((item) => {
-    const r = item as {
-      name: string;
-      nameWithOwner: string;
-      stargazerCount?: number;
-      forkCount?: number;
-      primaryLanguage?: { name: string } | null;
-      updatedAt?: string;
-    };
+  contributedRepos.forEach((r) => {
     nodes.push({
       id: r.nameWithOwner,
       name: r.name,
       type: 'Contribution',
-      val: Math.max(5, Math.min(20, (r.stargazerCount ?? 0) / 10 + 5)),
+      val: Math.max(5, Math.min(20, r.stargazerCount / 10 + 5)),
       color: '#22C55E',
       stats: {
         stars: r.stargazerCount,
@@ -1547,7 +1553,8 @@ export async function getFullDashboardData(username: string, options: FetchOptio
 export async function getWrappedData(
   username: string,
   year?: string,
-  options?: FetchOptions
+  options?: FetchOptions,
+  timezone: string = 'UTC'
 ): Promise<import('../types/dashboard').WrappedStats> {
   const trimmedYear = typeof year === 'string' ? year.trim() : '';
   const fallbackYear = new Date().getFullYear().toString();
@@ -1586,8 +1593,11 @@ export async function getWrappedData(
     Object.entries(monthTotals).sort((a, b) => b[1] - a[1])[0]?.[0] ?? `${normalizedYear}-01`;
 
   const weekendDays = allDays.filter((d) => {
-    const dow = new Date(d.date).getUTCDay();
-    return dow === 0 || dow === 6;
+    const dowStr = new Intl.DateTimeFormat('en-US', {
+      timeZone: timezone,
+      weekday: 'short',
+    }).format(new Date(d.date + 'T12:00:00Z'));
+    return dowStr === 'Sat' || dowStr === 'Sun';
   });
   const weekendTotal = weekendDays.reduce((sum, d) => sum + d.contributionCount, 0);
   const weekendRatio =

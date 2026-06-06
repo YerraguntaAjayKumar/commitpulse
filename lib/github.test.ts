@@ -2505,3 +2505,99 @@ describe('runCappedConcurrency', () => {
     expect(results[4]).toBe(50);
   });
 });
+
+describe('buildCommitClock timezone-aware', () => {
+  it('counts a Friday contribution as Friday (weekday) in IST', () => {
+    const result = buildCommitClock([{ date: '2024-01-05', contributionCount: 4 }], 'Asia/Kolkata');
+    expect(result[5].day).toBe('Fri');
+    expect(result[5].commits).toBe(4);
+    expect(result[6].commits).toBe(0);
+  });
+
+  it('counts a Saturday contribution in UTC-5 as Saturday', () => {
+    const result = buildCommitClock(
+      [{ date: '2024-01-06', contributionCount: 3 }],
+      'America/New_York'
+    );
+    expect(result[6].day).toBe('Sat');
+    expect(result[6].commits).toBe(3);
+  });
+
+  it('defaults to UTC when no timezone is provided', () => {
+    const result = buildCommitClock([{ date: '2024-01-07', contributionCount: 2 }]);
+    expect(result[0].day).toBe('Sun');
+    expect(result[0].commits).toBe(2);
+  });
+});
+
+describe('getWrappedData weekendRatio', () => {
+  beforeEach(() => vi.spyOn(global, 'fetch'));
+  afterEach(() => vi.restoreAllMocks());
+
+  it('returns weekendRatio of 100 when all contributions are on weekend days', async () => {
+    vi.mocked(fetch).mockImplementation(async (url) => {
+      const urlStr = typeof url === 'string' ? url : (url?.toString() ?? '');
+      if (urlStr.includes('/repos')) return mockResponse([]);
+      return mockResponse({
+        data: {
+          user: {
+            contributionsCollection: {
+              contributionCalendar: {
+                totalContributions: 10,
+                weeks: [
+                  {
+                    contributionDays: [
+                      { date: '2024-01-06', contributionCount: 5 },
+                      { date: '2024-01-07', contributionCount: 5 },
+                    ],
+                  },
+                ],
+              },
+            },
+          },
+        },
+      });
+    });
+    const result = await getWrappedData('octocat', '2024');
+    expect(result.weekendRatio).toBe(100);
+  });
+
+  it('returns weekendRatio of 0 when all contributions are on weekdays', async () => {
+    vi.mocked(fetch).mockImplementation(async (url) => {
+      const urlStr = typeof url === 'string' ? url : (url?.toString() ?? '');
+      if (urlStr.includes('/repos')) return mockResponse([]);
+      return mockResponse({
+        data: {
+          user: {
+            contributionsCollection: {
+              contributionCalendar: {
+                totalContributions: 10,
+                weeks: [{ contributionDays: [{ date: '2024-01-05', contributionCount: 10 }] }],
+              },
+            },
+          },
+        },
+      });
+    });
+    const result = await getWrappedData('octocat', '2024');
+    expect(result.weekendRatio).toBe(0);
+  });
+
+  it('returns weekendRatio of 0 when there are no contributions', async () => {
+    vi.mocked(fetch).mockImplementation(async (url) => {
+      const urlStr = typeof url === 'string' ? url : (url?.toString() ?? '');
+      if (urlStr.includes('/repos')) return mockResponse([]);
+      return mockResponse({
+        data: {
+          user: {
+            contributionsCollection: {
+              contributionCalendar: { totalContributions: 0, weeks: [] },
+            },
+          },
+        },
+      });
+    });
+    const result = await getWrappedData('octocat', '2024');
+    expect(result.weekendRatio).toBe(0);
+  });
+});

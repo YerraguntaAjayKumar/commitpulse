@@ -1,5 +1,6 @@
 'use client';
 
+import { fallbackCopyToClipboard } from '@/utils/clipboard';
 import { useCallback, useEffect, useRef, useState, Suspense, type ReactElement } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { validateGitHubUsername } from '@/lib/validations';
@@ -9,6 +10,7 @@ import { ControlsPanel } from './components/ControlsPanel';
 import { AdvancedSettingsPanel } from './components/AdvancedSettingsPanel';
 import { ExportPanel } from './components/ExportPanel';
 import InteractiveViewer from '@/components/InteractiveViewer';
+import { Footer } from '@/app/components/Footer';
 import DOMPurify from 'dompurify';
 import type {
   ExportFormat,
@@ -235,6 +237,7 @@ function CustomizePageInner(): ReactElement {
         // while preserving the necessary layout and structural attributes our SVG requires.
         const sanitized = DOMPurify.sanitize(text, {
           USE_PROFILES: { svg: true },
+          ADD_TAGS: ['filter', 'feGaussianBlur', 'feMerge', 'feMergeNode', 'feComposite'],
           ADD_ATTR: [
             'viewBox',
             'd',
@@ -250,6 +253,15 @@ function CustomizePageInner(): ReactElement {
             'font-size',
             'font-weight',
             'fill-opacity',
+            'filter',
+            'stdDeviation',
+            'result',
+            'in',
+            'in2',
+            'operator',
+            'x',
+            'y',
+            'id',
           ],
         });
 
@@ -269,30 +281,6 @@ function CustomizePageInner(): ReactElement {
 
   const exportSnippet = getExportSnippet(exportFormat, queryString);
 
-  const fallbackCopyToClipboard = (text: string): boolean => {
-    try {
-      const textElement = document.createElement('textarea');
-
-      textElement.value = text;
-      textElement.style.position = 'fixed';
-      textElement.style.opacity = '0';
-      textElement.style.pointerEvents = 'none';
-
-      document.body.appendChild(textElement);
-
-      textElement.focus();
-      textElement.select();
-
-      const successful = document.execCommand('copy');
-
-      document.body.removeChild(textElement);
-
-      return successful;
-    } catch {
-      return false;
-    }
-  };
-
   const announceCopyStatus = useCallback((message: string): void => {
     setCopyStatusMessage('');
     window.setTimeout(() => {
@@ -305,7 +293,15 @@ function CustomizePageInner(): ReactElement {
 
     try {
       if (navigator.clipboard && window.isSecureContext) {
-        await navigator.clipboard.writeText(exportSnippet);
+        try {
+          await navigator.clipboard.writeText(exportSnippet);
+        } catch {
+          const copiedSuccessfully = fallbackCopyToClipboard(exportSnippet);
+
+          if (!copiedSuccessfully) {
+            throw new Error('Fallback clipboard copy failed.');
+          }
+        }
       } else {
         const copiedSuccessfully = fallbackCopyToClipboard(exportSnippet);
 
@@ -675,6 +671,7 @@ function CustomizePageInner(): ReactElement {
           </motion.aside>
         </div>
       </div>
+      <Footer />
     </div>
   );
 }

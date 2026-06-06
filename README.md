@@ -111,6 +111,12 @@ Transform your GitHub contribution history into a cinematic 3D monolith.
 ![CommitPulse](https://commitpulse.vercel.app/api/streak?user=jhasourav07&bg=0a0a0a&accent=ff6b35&text=ffffff)
 ```
 
+#### 📅 Monthly Summary
+
+```md
+![CommitPulse Monthly](https://commitpulse.vercel.app/api/streak?user=octocat&view=monthly)
+```
+
 ---
 
 ## 📚 Documentation Index

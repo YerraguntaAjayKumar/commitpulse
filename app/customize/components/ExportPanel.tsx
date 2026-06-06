@@ -4,6 +4,7 @@ import type { ReactElement } from 'react';
 import type { ExportFormat } from '../types';
 import { getPlaceholderSnippet } from '../utils';
 import { useTranslation } from '@/context/TranslationContext';
+import { Copy, Check } from 'lucide-react';
 
 const EXPORT_FORMATS: { value: ExportFormat; labelKey: string }[] = [
   { value: 'markdown', labelKey: 'markdown' },
@@ -151,6 +152,9 @@ export function ExportPanel({
       toast.error('Failed to retrieve the latest badge asset. Please try again.');
     }
   };
+
+  const [markdownCopied, setMarkdownCopied] = useState(false);
+  const [filePathCopied, setFilePathCopied] = useState(false);
 
   return (
     <div className="flex flex-col gap-4">
@@ -306,11 +310,43 @@ export function ExportPanel({
           <>
             <p>
               <strong>Step 1:</strong> Save the workflow snippet above as{' '}
-              <code className="text-gray-700 dark:text-white/75">
-                .github/workflows/commitpulse.yml
-              </code>{' '}
-              to automatically fetch and commit your customized badge.
             </p>
+            <div className="mt-2 bg-gray-100/80 dark:bg-white/[0.03] border border-black/10 dark:border-white/10 rounded-lg px-3 py-2 flex items-center justify-between group">
+              <code className="text-emerald-600 dark:text-emerald-300 font-mono select-all">
+                .github/workflows/commitpulse.yml
+              </code>
+
+              <button
+                type="button"
+                onClick={async () => {
+                  await navigator.clipboard.writeText('.github/workflows/commitpulse.yml');
+
+                  if ('vibrate' in navigator) {
+                    navigator.vibrate(30);
+                  }
+
+                  setFilePathCopied(true);
+
+                  setTimeout(() => {
+                    setFilePathCopied(false);
+                  }, 1000);
+                }}
+                className={`transition-all duration-200 ${
+                  filePathCopied
+                    ? 'text-emerald-500 scale-110'
+                    : 'text-gray-400 hover:text-emerald-500'
+                }`}
+                title="Copy Step 2 markdown"
+                aria-label="Copy Step 2 markdown snippet"
+              >
+                {filePathCopied ? (
+                  <Check className="h-3.5 w-3.5" />
+                ) : (
+                  <Copy className="h-3.5 w-3.5" />
+                )}
+              </button>
+            </div>
+            <p>to automatically fetch and commit your customized badge.</p>
             <p>
               <strong>Step 2:</strong> Embed the generated SVG into your{' '}
               <code className="text-gray-700 dark:text-white/75">README.md</code> using the markdown
@@ -320,28 +356,35 @@ export function ExportPanel({
               <code className="text-emerald-600 dark:text-emerald-300 font-mono select-all">
                 ![CommitPulse](commitpulse.svg)
               </code>
+
               <button
                 type="button"
-                onClick={() => {
-                  navigator.clipboard.writeText('![CommitPulse](commitpulse.svg)');
+                onClick={async () => {
+                  await navigator.clipboard.writeText('![CommitPulse](commitpulse.svg)');
+
+                  if ('vibrate' in navigator) {
+                    navigator.vibrate(30);
+                  }
+
+                  setMarkdownCopied(true);
+
+                  setTimeout(() => {
+                    setMarkdownCopied(false);
+                  }, 1000);
                 }}
-                className="text-gray-400 hover:text-emerald-500 transition-colors"
+                className={`transition-all duration-200 ${
+                  markdownCopied
+                    ? 'text-emerald-500 scale-110'
+                    : 'text-gray-400 hover:text-emerald-500'
+                }`}
                 title="Copy Step 2 markdown"
                 aria-label="Copy Step 2 markdown snippet"
               >
-                <svg
-                  xmlns="http://www.w3.org/2000/svg"
-                  className="h-3.5 w-3.5"
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="currentColor"
-                  strokeWidth="2.5"
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                >
-                  <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
-                  <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
-                </svg>
+                {markdownCopied ? (
+                  <Check className="h-3.5 w-3.5" />
+                ) : (
+                  <Copy className="h-3.5 w-3.5" />
+                )}
               </button>
             </div>
           </>

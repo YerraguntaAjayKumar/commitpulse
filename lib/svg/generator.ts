@@ -192,7 +192,7 @@ function renderHeader(
   params: BadgeParams,
   safeId: string
 ): string {
-  const unit = params.mode === 'loc' ? 'lines of code' : 'total contributions';
+  const unit = params.mode === 'loc' ? 'est. lines of code' : 'total contributions';
   const entity = params.org ? 'Organization' : params.repo ? 'Repository' : 'User';
 
   return `
@@ -326,22 +326,25 @@ function renderStatsSection(
   stats: StreakStats,
   labels: BadgeLabels,
   s: Scaler,
-  params: BadgeParams
+  params: BadgeParams,
+  yOffset = 0
 ): string {
   const totalLabel =
     params.mode === 'loc' ? 'TOTAL LINES OF CODE (EST.)' : labels.ANNUAL_SYNC_TOTAL;
   const glowAttr = params.glow !== false ? ' filter="url(#glow)"' : '';
 
   return `
-  <g transform="translate(${s(100)}, ${s(340)})" text-anchor="middle">
+  <g transform="translate(${s(100)}, ${s(340 + yOffset)})" text-anchor="middle">
     <text class="label">${labels.CURRENT_STREAK}</text>
     <text y="${s(40)}" class="stats"${glowAttr}>${stats.currentStreak}</text>
   </g>
-  <g transform="translate(${s(300)}, ${s(340)})" text-anchor="middle">
+
+  <g transform="translate(${s(300)}, ${s(340 + yOffset)})" text-anchor="middle">
     <text class="label">${totalLabel}</text>
     <text y="${s(40)}" class="total-val"${glowAttr}>${stats.totalContributions}</text>
   </g>
-  <g transform="translate(${s(500)}, ${s(340)})" text-anchor="middle">
+
+  <g transform="translate(${s(500)}, ${s(340 + yOffset)})" text-anchor="middle">
     <text class="label">${labels.PEAK_STREAK}</text>
     <text y="${s(40)}" class="stats">${stats.longestStreak}</text>
   </g>`;
@@ -568,13 +571,25 @@ function renderFooter(
   isWinner?: boolean
 ): string {
   const s = createScaler(sf);
-  const titleText = `${truncateUsername(safeUser).toUpperCase()}${isWinner ? ' 👑' : ''}${params.isOfflineFallback ? '<tspan fill="#ff9f43" font-size="10px" font-weight="bold"> [STALE CACHE]</tspan>' : ''}`;
+  const statsOffset = params.label === false ? -40 : 0;
+
+  const titleText = `${truncateUsername(safeUser).toUpperCase()}${isWinner ? ' 👑' : ''}${
+    params.isOfflineFallback
+      ? '<tspan fill="#ff9f43" font-size="10px" font-weight="bold"> [STALE CACHE]</tspan>'
+      : ''
+  }`;
+
   return `
-  ${!params.hide_stats ? renderStatsSection(stats, labels, s, params) : ''}
-  ${!params.hide_title ? `<text x="${s(300)}" y="${s(50)}" text-anchor="middle" class="title">${titleText}</text>` : ''}
+  ${!params.hide_stats ? renderStatsSection(stats, labels, s, params, statsOffset) : ''}
+
+  ${
+    !params.hide_title && params.label !== false
+      ? `<text x="${s(300)}" y="${s(50)}" text-anchor="middle" class="title">${titleText}</text>`
+      : ''
+  }
   <rect
     x="${s(100)}"
-    y="${s(80)}"
+    y="${s(80 + statsOffset)}"
     width="${s(400)}"
     height="${s(1)}"
     class="cp-accent-fill scan-line"
@@ -739,9 +754,10 @@ export function generateSVG(
   const sf = getSizeScale(params.size);
   const radius = sanitizeRadius(params.radius, 8) * sf;
   const labels = getLabels(params.lang);
+  const labelVisible = params.label !== false;
   const W = Math.round(SVG_WIDTH * sf);
-  const H = Math.round(SVG_HEIGHT * sf);
-
+  const H = Math.round((labelVisible ? SVG_HEIGHT : SVG_HEIGHT - 40) * sf);
+  const yOffset = params.label === false ? -40 : 0;
   const towerData = scaleTowerData(
     computeTowers(calendar, params.scale, stats.todayDate, params.mode),
     sf
@@ -772,7 +788,7 @@ export function generateSVG(
   ${renderHeader(safeUser, stats, sf, params, safeId)}
   ${renderStyle(selectedFont, statsFont, googleFontsImport, text, mainAccentHex, sf, bg, params.entrance || 'rise')}
   <rect width="${W}" height="${H}" rx="${radius}" fill="${params.hideBackground ? 'transparent' : bg}" ${borderAttr} />
-  <g id="cp-towers" style="transform-origin: center; transform-box: fill-box;" transform="translate(0, ${Math.round(20 * sf)})">${towers}</g>
+  <g id="cp-towers" style="transform-origin: center; transform-box: fill-box;" transform="translate(0, ${Math.round((20 + yOffset) * sf)})">${towers}</g>
   ${renderIsometricLabels(calendar, params, text, sf)}
   ${renderFooter(stats, params, labels, safeUser, mainAccentHex, sf)}
   ${renderMilestoneBadges(stats, params, sf)}
@@ -802,7 +818,9 @@ function generateAutoThemeSVG(
   const radius = sanitizeRadius(params.radius, 8) * sf;
   const labels = getLabels(params.lang);
   const W = Math.round(SVG_WIDTH * sf);
-  const H = Math.round(SVG_HEIGHT * sf);
+  const labelVisible = params.label !== false;
+  const H = Math.round((labelVisible ? SVG_HEIGHT : SVG_HEIGHT - 40) * sf);
+  const yOffset = params.label === false ? -40 : 0;
   const towerData = scaleTowerData(
     computeTowers(calendar, params.scale, stats.todayDate, params.mode),
     sf
@@ -860,13 +878,13 @@ function generateAutoThemeSVG(
   </style>
 
   <rect width="${W}" height="${H}" rx="${radius}" ${params.hideBackground ? 'fill="transparent"' : 'class="cp-bg-fill"'} />
-  <g id="cp-towers" style="transform-origin: center; transform-box: fill-box;" transform="translate(0, ${s(20)})">
+  <g id="cp-towers" style="transform-origin: center; transform-box: fill-box;" transform="translate(0, ${s(20 + yOffset)})">
     ${towers}
   </g>
   ${renderIsometricLabels(calendar, params, 'var(--cp-text)', sf)}
   ${!params.hide_stats ? renderStatsSection(stats, labels, s, params) : ''}
 ${
-  !params.hide_title
+  !params.hide_title && params.label !== false
     ? `<text x="${s(300)}" y="${s(50)}" text-anchor="middle" class="title">${truncateUsername(safeUser).toUpperCase()}${params.isOfflineFallback ? '<tspan fill="#ff9f43" font-size="10px" font-weight="bold"> [STALE CACHE]</tspan>' : ''}</text>`
     : ''
 }
@@ -907,8 +925,9 @@ export function generateMonthlySVG(stats: MonthlyStats, params: BadgeParams): st
     ? `@import url('https://fonts.googleapis.com/css2?family=${googleFontUrlPart}&amp;display=swap');`
     : '';
 
-  const commitsLabel = params.mode === 'loc' ? 'LINES THIS MONTH' : labels.COMMITS_THIS_MONTH;
-  const deltaUnit = params.mode === 'loc' ? 'lines' : 'commits';
+  const commitsLabel =
+    params.mode === 'loc' ? 'LINES THIS MONTH (EST.)' : labels.COMMITS_THIS_MONTH;
+  const deltaUnit = params.mode === 'loc' ? 'LINES (EST.)' : 'commits';
 
   let deltaText = '';
   if (params.delta_format === 'absolute') {
@@ -994,6 +1013,14 @@ export function generateMonthlySVG(stats: MonthlyStats, params: BadgeParams): st
   </g>
 </svg>
 `;
+}
+
+/**
+ * Backwards-compatible alias used by some integrations/tests.
+ * Keeps the public API explicit: `generateMonthlyBadge` -> `generateMonthlySVG`.
+ */
+export function generateMonthlyBadge(stats: MonthlyStats, params: BadgeParams): string {
+  return generateMonthlySVG(stats, params);
 }
 
 export function generateWrappedSVG(
@@ -1277,8 +1304,9 @@ function generateAutoThemeMonthlySVG(stats: MonthlyStats, params: BadgeParams): 
   const width = params.width || 300;
   const height = params.height || 120;
 
-  const commitsLabel = params.mode === 'loc' ? 'LINES THIS MONTH' : labels.COMMITS_THIS_MONTH;
-  const deltaUnit = params.mode === 'loc' ? 'lines' : 'commits';
+  const commitsLabel =
+    params.mode === 'loc' ? 'LINES THIS MONTH (EST.)' : labels.COMMITS_THIS_MONTH;
+  const deltaUnit = params.mode === 'loc' ? 'LINES (EST.)' : 'commits';
 
   let deltaText = '';
   if (params.delta_format === 'absolute') {
@@ -1439,7 +1467,7 @@ function renderHeatmapGrid(
         day.date === todayDate ||
         (!todayInWindow && col === weeks.length - 1 && row === week.contributionDays.length - 1);
 
-      const unit = mode === 'loc' ? 'lines of code' : 'contributions';
+      const unit = mode === 'loc' ? 'est. lines of code' : 'contributions';
       const tooltipPrefix = isToday ? 'TODAY: ' : '';
       const tooltip = `${tooltipPrefix}${day.date}: ${count} ${unit}`;
 
@@ -1577,7 +1605,7 @@ export function generateHeatmapSVG(
   );
   const legend = renderHeatmapLegend(accent, text, sf, s(60), s(270), false);
 
-  const unit = params.mode === 'loc' ? 'lines of code' : 'total contributions';
+  const unit = params.mode === 'loc' ? 'est. lines of code' : 'total contributions';
 
   const filterGlow =
     params.glow !== false
@@ -1653,7 +1681,7 @@ export function generateHeatmapSVG(
       <text y="${s(22)}" class="hm-stats-val">${stats.currentStreak}</text>
     </g>
     <g transform="translate(${s(160)}, 0)">
-      <text class="hm-label">${params.mode === 'loc' ? 'TOTAL LINES OF CODE' : labels.ANNUAL_SYNC_TOTAL}</text>
+      <text class="hm-label">${params.mode === 'loc' ? 'TOTAL LINES OF CODE (EST.)' : labels.ANNUAL_SYNC_TOTAL}</text>
       <text y="${s(22)}" class="hm-total-val">${stats.totalContributions}</text>
     </g>
     <g transform="translate(${s(360)}, 0)">
@@ -1704,7 +1732,7 @@ function generateAutoThemeHeatmapSVG(
   );
   const legend = renderHeatmapLegend('', '', sf, s(60), s(270), true);
 
-  const unit = params.mode === 'loc' ? 'lines of code' : 'total contributions';
+  const unit = params.mode === 'loc' ? 'est. lines of code' : 'total contributions';
 
   const filterGlow =
     params.glow !== false
@@ -1786,7 +1814,7 @@ function generateAutoThemeHeatmapSVG(
       <text y="${s(22)}" class="hm-stats-val">${stats.currentStreak}</text>
     </g>
     <g transform="translate(${s(160)}, 0)">
-      <text class="hm-label">${params.mode === 'loc' ? 'TOTAL LINES OF CODE' : labels.ANNUAL_SYNC_TOTAL}</text>
+      <text class="hm-label">${params.mode === 'loc' ? 'TOTAL LINES OF CODE (EST.)' : labels.ANNUAL_SYNC_TOTAL}</text>
       <text y="${s(22)}" class="hm-total-val">${stats.totalContributions}</text>
     </g>
     <g transform="translate(${s(360)}, 0)">
@@ -2044,7 +2072,7 @@ export function generateVersusSVG(
   const towers2 = renderTowers(towerData2, params, accent, text, sf, false, params.opacity ?? 1.0);
 
   const s = createScaler(sf);
-  const unit = params.mode === 'loc' ? 'lines of code' : 'total contributions';
+  const unit = params.mode === 'loc' ? 'est. lines of code' : 'total contributions';
 
   const safeId = `${safeUser1}_vs_${safeUser2}`.replace(/[^a-zA-Z0-9-]/g, '_').toLowerCase();
 
@@ -2187,7 +2215,7 @@ function generateAutoThemeVersusSVG(
 
   const s = createScaler(sf);
   const fs = (n: number): number => Math.round(n * sf * 10) / 10;
-  const unit = params.mode === 'loc' ? 'lines of code' : 'total contributions';
+  const unit = params.mode === 'loc' ? 'est. lines of code' : 'total contributions';
 
   const safeId = `${safeUser1}_vs_${safeUser2}`.replace(/[^a-zA-Z0-9-]/g, '_').toLowerCase();
 
@@ -2429,7 +2457,7 @@ export function generatePulseSVG(
   ${
     !params.hide_stats
       ? `
-  <text x="${width - 30}" y="42" text-anchor="end" class="stats">${pulseTotal} ${params.mode === 'loc' ? 'LINES' : 'COMMITS'}</text>
+  <text x="${width - 30}" y="42" text-anchor="end" class="stats">${pulseTotal} ${params.mode === 'loc' ? 'LINES (EST.)' : 'COMMITS'}</text>
   <text x="${width - 30}" y="58" text-anchor="end" class="label">LAST 30 DAYS</text>
   `
       : ''
@@ -2617,7 +2645,7 @@ function generateAutoThemePulseSVG(
   ${
     !params.hide_stats
       ? `
-  <text x="${width - 30}" y="42" text-anchor="end" class="stats">${pulseTotal} ${params.mode === 'loc' ? 'LINES' : 'COMMITS'}</text>
+  <text x="${width - 30}" y="42" text-anchor="end" class="stats">${pulseTotal} ${params.mode === 'loc' ? 'LINES (EST.)' : 'COMMITS'}</text>
   <text x="${width - 30}" y="58" text-anchor="end" class="label">LAST 30 DAYS</text>
   `
       : ''
@@ -2824,15 +2852,10 @@ export function generateLanguagesSVG(
     const scaledY = H / 2 + (50 + lang.coord.y) * sf;
     const h = Math.max(30, (lang.percentage / maxPercent) * 140) * sf;
 
-    // Scale up the tower base size
-    const tw = 16 * TOWER_SCALE * sf; // half-width
-    const th = 10 * TOWER_SCALE * sf; // half-height
-
-    const paths = {
-      left: `M0 ${-h} L0 ${th} L${-tw} 0 L${-tw} ${-h - th} Z`,
-      right: `M0 ${-h} L0 ${th} L${tw} 0 L${tw} ${-h - th} Z`,
-      top: `M0 ${-h - th} L${tw} ${-h} L0 ${-h + th} L${-tw} ${-h} Z`,
-    };
+    // Use the centralized tower path builder for consistent isometric geometry
+    const towerScale = TOWER_SCALE * sf;
+    const paths = buildTowerPaths(h, towerScale);
+    const th = 10 * towerScale; // half-height, used for text label positioning
 
     const hexColor = lang.color.startsWith('#') ? lang.color : `#${lang.color}`;
     const delay = (idx * 0.15).toFixed(3);

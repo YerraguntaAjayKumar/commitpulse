@@ -106,6 +106,7 @@ export async function GET(request: Request) {
       glow,
       format,
       days,
+      label,
       badges,
       entrance,
     } = parseResult.data;
@@ -239,6 +240,7 @@ export async function GET(request: Request) {
       disable_particles,
       glow,
       animate,
+      label,
       badges,
       entrance,
     };
