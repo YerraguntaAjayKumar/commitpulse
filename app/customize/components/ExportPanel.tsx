@@ -150,7 +150,7 @@ export function ExportPanel({
 
         <div className="flex flex-wrap items-center gap-3">
           <div
-            className="inline-flex rounded-xl border border-black/10 bg-white/60 backdrop-blur-md dark:border-white/10 dark:bg-white/[0.03] p-1"
+            className="flex flex-wrap sm:flex-nowrap rounded-xl border border-black/10 bg-white/60 backdrop-blur-md dark:border-white/10 dark:bg-white/[0.03] p-1"
             aria-label="Export format"
           >
             {EXPORT_FORMATS.map((option) => (

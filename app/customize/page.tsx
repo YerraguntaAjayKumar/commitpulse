@@ -419,7 +419,7 @@ function CustomizePageInner(): ReactElement {
             initial={{ opacity: 0, x: -20 }}
             animate={{ opacity: 1, x: 0 }}
             transition={{ duration: 0.5, delay: 0.1 }}
-            className="bg-white/70 backdrop-blur-xl border border-black/10 dark:bg-black/35 dark:border-white/10 rounded-[1.75rem] p-6 flex flex-col gap-6 sticky top-6 shadow-[0_20px_60px_rgba(0,0,0,0.35)]"
+            className="bg-white/70 backdrop-blur-xl border border-black/10 dark:bg-black/35 dark:border-white/10 rounded-[1.75rem] p-6 flex flex-col gap-6 sticky top-6 shadow-[0_20px_60px_rgba(0,0,0,0.35)] min-w-0"
           >
             <ControlsPanel
               username={username}
@@ -457,7 +457,7 @@ function CustomizePageInner(): ReactElement {
             initial={{ opacity: 0, x: 20 }}
             animate={{ opacity: 1, x: 0 }}
             transition={{ duration: 0.5, delay: 0.15 }}
-            className="flex flex-col gap-6"
+            className="flex flex-col gap-6 min-w-0"
           >
             {/* Live Preview */}
             <div className="bg-white/70 backdrop-blur-xl border border-black/10 dark:bg-black/35 dark:border-white/10 rounded-[1.75rem] p-6 shadow-[0_20px_60px_rgba(0,0,0,0.35)]">
@@ -623,11 +623,11 @@ function CustomizePageInner(): ReactElement {
                     return (
                       <span
                         key={k}
-                        className="inline-flex items-center gap-1.5 bg-gray-100/80 backdrop-blur-md border border-black/10 dark:bg-white/[0.03] dark:border-white/10 rounded-lg px-3 py-1.5 text-xs font-mono"
+                        className="inline-flex items-center gap-1.5 bg-gray-100/80 backdrop-blur-md border border-black/10 dark:bg-white/[0.03] dark:border-white/10 rounded-lg px-3 py-1.5 text-xs font-mono break-all"
                       >
-                        <span className="text-purple-400">{decodeURIComponent(k)}</span>
-                        <span className="text-gray-400 dark:text-white/55">=</span>
-                        <span className="text-emerald-600 dark:text-emerald-400">
+                        <span className="text-purple-400 break-all">{decodeURIComponent(k)}</span>
+                        <span className="text-gray-400 dark:text-white/55 shrink-0">=</span>
+                        <span className="text-emerald-600 dark:text-emerald-400 break-all">
                           {decodeURIComponent(v)}
                         </span>
                       </span>
@@ -643,7 +643,7 @@ function CustomizePageInner(): ReactElement {
             initial={{ opacity: 0, x: 20 }}
             animate={{ opacity: 1, x: 0 }}
             transition={{ duration: 0.5, delay: 0.2 }}
-            className="bg-white/70 backdrop-blur-xl border border-black/10 dark:bg-black/35 dark:border-white/10 rounded-[1.75rem] p-6 flex flex-col gap-6 sticky top-6 shadow-[0_20px_60px_rgba(0,0,0,0.35)] xl:col-start-3"
+            className="bg-white/70 backdrop-blur-xl border border-black/10 dark:bg-black/35 dark:border-white/10 rounded-[1.75rem] p-6 flex flex-col gap-6 sticky top-6 shadow-[0_20px_60px_rgba(0,0,0,0.35)] xl:col-start-3 min-w-0"
           >
             <AdvancedSettingsPanel
               hideTitle={hideTitle}
