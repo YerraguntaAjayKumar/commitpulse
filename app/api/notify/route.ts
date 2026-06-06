@@ -42,7 +42,8 @@ export async function POST(req: Request) {
   const ip = getClientIp(req);
 
   // fallback ensures rate limit is ALWAYS applied
-  const rateLimitKey = ip && ip !== 'unknown' ? ip : `unknown:${req.headers.get('user-agent') ?? 'no-agent'}`;
+  const rateLimitKey =
+    ip && ip !== 'unknown' ? ip : `unknown:${req.headers.get('user-agent') ?? 'no-agent'}`;
   const rateLimitResult = await notifyRateLimiter.checkWithResult(rateLimitKey);
 
   if (!rateLimitResult.success) {

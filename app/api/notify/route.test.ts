@@ -12,6 +12,11 @@ vi.mock('@/models/Notification', () => ({
   },
 }));
 vi.mock('@/lib/rate-limit', () => ({
+  getRateLimitHeaders: vi.fn((result) => ({
+    'X-RateLimit-Limit': result.limit.toString(),
+    'X-RateLimit-Remaining': result.remaining.toString(),
+    'X-RateLimit-Reset': result.reset.toString(),
+  })),
   notifyRateLimiter: {
     check: vi.fn().mockResolvedValue(true),
     checkWithResult: vi.fn().mockResolvedValue({

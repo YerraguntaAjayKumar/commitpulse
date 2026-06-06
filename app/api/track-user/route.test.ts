@@ -6,6 +6,11 @@ import { trackUserRateLimiter } from '@/lib/rate-limit';
 
 // Mock dependencies
 vi.mock('@/lib/rate-limit', () => ({
+  getRateLimitHeaders: vi.fn((result) => ({
+    'X-RateLimit-Limit': result.limit.toString(),
+    'X-RateLimit-Remaining': result.remaining.toString(),
+    'X-RateLimit-Reset': result.reset.toString(),
+  })),
   trackUserRateLimiter: {
     check: vi.fn().mockResolvedValue(true),
     checkWithResult: vi.fn().mockResolvedValue({
@@ -41,10 +46,10 @@ import { fetchUserProfile } from '@/lib/github';
 import { trackUserProtection } from '@/services/security/track-user-protection';
 import { gitHubUserValidator } from '@/services/github/validate-user';
 
-function makeRequest(body: Record<string, unknown>): Request {
+function makeRequest(body: Record<string, unknown>, headers?: HeadersInit): Request {
   return new Request('http://localhost/api/track-user', {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers: { 'Content-Type': 'application/json', ...headers },
     body: JSON.stringify(body),
   });
 }
@@ -152,7 +157,7 @@ describe('POST /api/track-user', () => {
     });
   });
 
-    it('returns 429 with rate limit headers when rate limited', async () => {
+  it('returns 429 with rate limit headers when rate limited', async () => {
     const reset = Date.now() + 60000;
     vi.mocked(trackUserRateLimiter.checkWithResult).mockResolvedValueOnce({
       success: false,
@@ -161,7 +166,9 @@ describe('POST /api/track-user', () => {
       reset,
     });
 
-    const response = await POST(makeRequest({ username: 'valid-user' }));
+    const response = await POST(
+      makeRequest({ username: 'valid-user' }, { 'x-real-ip': '198.51.100.10' })
+    );
 
     expect(response.status).toBe(429);
     expect(response.headers.get('x-ratelimit-limit')).toBe('5');
