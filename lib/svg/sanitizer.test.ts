@@ -142,6 +142,12 @@ describe('SVG Sanitizer Utilities', () => {
       expect(sanitizeHexColor(null, '000000')).toBe('000000');
       expect(sanitizeHexColor(undefined, '000000')).toBe('000000');
     });
+
+    it('uses drop-shadow glow color fallback for unrecognized hex strings in SVG filters', () => {
+      expect(sanitizeHexColor('invalid-accent', '00ffaa')).toBe('00ffaa');
+      expect(sanitizeHexColor('not-a-glow', '00ffaa')).toBe('00ffaa');
+      expect(sanitizeHexColor('xyz123abc', '00ffaa')).toBe('00ffaa');
+    });
   });
 
   describe('sanitizeSpeed', () => {

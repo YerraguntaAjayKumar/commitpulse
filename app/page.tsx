@@ -1,4 +1,6 @@
 'use client';
+import Image from 'next/image';
+import { fallbackCopyToClipboard } from '@/utils/clipboard';
 import { trackUser } from '@/utils/tracking';
 
 import Link from 'next/link';
@@ -6,8 +8,8 @@ import { useRef, useState, useEffect } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
 import { gsap } from 'gsap';
 import { useGSAP } from '@gsap/react';
+
 import {
-  X,
   Flame,
   Trophy,
   GitCommit,
@@ -18,6 +20,9 @@ import {
   Copy,
   ExternalLink,
 } from 'lucide-react';
+
+import { X } from 'lucide-react';
+import useLocalStorage from '@/hooks/useLocalStorage';
 
 import { CommitPulseLogo } from '@/components/commitpulse-logo';
 import { CustomizeCTA } from './components/CustomizeCTA';
@@ -301,9 +306,12 @@ export default function LandingPage() {
     return name;
   };
 
-  const [username, setUsername] = useState('');
+  const [username, setUsername] = useLocalStorage('commitpulse:last-user', '');
   const [instantUsername, setInstantUsername] = useState('');
   const [copied, setCopied] = useState(false);
+
+  const resetCopiedTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const scrollToGuideTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const [badgeResult, setBadgeResult] = useState<{
     username: string;
@@ -421,23 +429,64 @@ export default function LandingPage() {
     fetchDetails();
   }, [debouncedUsername, mounted]);
 
+  const clearCopyTimers = () => {
+    if (resetCopiedTimeoutRef.current) {
+      clearTimeout(resetCopiedTimeoutRef.current);
+      resetCopiedTimeoutRef.current = null;
+    }
+    if (scrollToGuideTimeoutRef.current) {
+      clearTimeout(scrollToGuideTimeoutRef.current);
+      scrollToGuideTimeoutRef.current = null;
+    }
+  };
+
+  useEffect(() => {
+    return () => {
+      clearCopyTimers();
+    };
+  }, []);
+
   const copyToClipboard = async () => {
     if (trimmedUsername.length === 0) return;
 
+    // Prevent overlapping timers from previous clicks
+    clearCopyTimers();
+
     try {
-      await navigator.clipboard.writeText(markdown);
+      if (navigator.clipboard && window.isSecureContext) {
+        try {
+          await navigator.clipboard.writeText(markdown);
+        } catch {
+          const copiedSuccessfully = fallbackCopyToClipboard(markdown);
+
+          if (!copiedSuccessfully) {
+            throw new Error('Clipboard copy failed');
+          }
+        }
+      } else {
+        const copiedSuccessfully = fallbackCopyToClipboard(markdown);
+
+        if (!copiedSuccessfully) {
+          throw new Error('Clipboard copy failed');
+        }
+      }
+
+      trackUser(trimmedUsername);
+      addSearch(trimmedUsername);
+
+      setCopied(true);
+
+      setTimeout(() => {
+        guideRef.current?.scrollIntoView({
+          behavior: 'smooth',
+          block: 'start',
+        });
+      }, 80);
+
+      setTimeout(() => setCopied(false), 3000);
     } catch {
       setCopied(false);
-      return;
     }
-
-    trackUser(trimmedUsername);
-    addSearch(trimmedUsername);
-    setCopied(true);
-    setTimeout(() => {
-      guideRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
-    }, 80);
-    setTimeout(() => setCopied(false), 3000);
   };
 
   const selectDemoUser = (name: string) => {
@@ -532,7 +581,6 @@ export default function LandingPage() {
                   </span>
                   <input
                     type="text"
-                    suppressHydrationWarning
                     placeholder="Enter GitHub Username"
                     aria-label="Enter GitHub username to generate badge"
                     className="flex-1 rounded-2xl border border-black/10 bg-white pl-12 pr-10 py-4 text-sm text-black outline-none transition-all duration-300 placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-emerald-400 focus:border-transparent dark:border-white/10 dark:bg-black/60 dark:text-white dark:placeholder:text-gray-500 shadow-inner"
@@ -572,9 +620,7 @@ export default function LandingPage() {
                 {/* Primary CTA: Generate Badge */}
                 <button
                   type="submit"
-                  suppressHydrationWarning
                   disabled={!mounted || trimmedUsername.length === 0}
-                  aria-label="Generate CommitPulse badge"
                   className={`relative flex min-w-[180px] items-center justify-center gap-2 overflow-hidden rounded-2xl px-6 py-4 text-sm font-bold transition-all duration-300 transform cursor-pointer hover:scale-[1.02] hover:shadow-lg active:scale-[0.98] disabled:cursor-not-allowed ${
                     mounted && trimmedUsername.length > 0
                       ? 'bg-gradient-to-r from-emerald-500 to-cyan-500 text-black shadow-[0_0_20px_rgba(16,185,129,0.25)] hover:opacity-95'
@@ -646,13 +692,12 @@ export default function LandingPage() {
                         exit={{ opacity: 0 }}
                         className="flex items-center gap-3 bg-emerald-500/5 border border-emerald-500/10 rounded-xl px-3 py-2"
                       >
-                        <img
+                        <Image
                           src={userDetails.avatar_url}
                           alt={userDetails.login}
+                          width={24}
+                          height={24}
                           className="w-6 h-6 rounded-full border border-emerald-500/20"
-                          onError={(e) => {
-                            (e.target as HTMLImageElement).src = 'https://github.com/github.png';
-                          }}
                         />
                         <div className="flex flex-col">
                           <span className="text-xs font-bold text-zinc-200">
@@ -703,14 +748,12 @@ export default function LandingPage() {
                             key={s}
                             className="inline-flex items-center gap-1.5 rounded-full border border-zinc-200/10 bg-zinc-200/5 dark:border-white/5 dark:bg-[#111] pl-2 pr-1.5 py-1 text-xs text-zinc-700 dark:text-white/70 transition-all duration-300 hover:border-emerald-500/30 hover:bg-zinc-200/10 dark:hover:bg-white/10 dark:hover:text-white select-none group/pill"
                           >
-                            <img
+                            <Image
                               src={`https://github.com/${displayName}.png?size=40`}
                               alt={displayName}
+                              width={16}
+                              height={16}
                               className="w-4 h-4 rounded-full border border-zinc-200/20 dark:border-white/20"
-                              onError={(e) => {
-                                (e.target as HTMLImageElement).src =
-                                  'https://github.com/github.png';
-                              }}
                             />
                             <button
                               type="button"
@@ -838,7 +881,13 @@ export default function LandingPage() {
                         </div>
                       </div>
                       {userDetailsLoading ? (
-                        <div className="h-8 w-20 bg-white/5 animate-pulse rounded-lg mt-1" />
+                        <div className="h-8 w-20 shimmer rounded-lg mt-1" />
+                      ) : userDetailsError && previewUsername ? (
+                        <div className="mt-1">
+                          <span className="text-[11px] text-red-400/80 font-medium leading-tight block">
+                            Unable to load stats
+                          </span>
+                        </div>
                       ) : (
                         <div className="text-2xl font-bold bg-gradient-to-br from-white to-zinc-400 bg-clip-text text-transparent flex items-baseline gap-1 mt-1 font-mono">
                           <CountUp value={item.value} />
@@ -897,7 +946,6 @@ export default function LandingPage() {
                   href={
                     mounted && trimmedUsername.length > 0 ? `/dashboard/${trimmedUsername}` : '/'
                   }
-                  suppressHydrationWarning
                   aria-disabled={!mounted || trimmedUsername.length === 0}
                   onClick={(e) => {
                     if (!mounted || trimmedUsername.length === 0) {
@@ -922,18 +970,18 @@ export default function LandingPage() {
         </section>
 
         {/* How It Works Section */}
-        <section className="mx-auto mb-32 max-w-4xl py-12 border-t border-white/5 relative z-20">
+        <section className="mx-auto mb-32 max-w-4xl py-12 border-t border-black/5 dark:border-white/5 relative z-20">
           <div className="text-center mb-16">
             <p className="text-xs font-bold uppercase tracking-[0.25em] bg-gradient-to-r from-emerald-400 to-cyan-500 bg-clip-text text-transparent mb-3">
               Workflow
             </p>
             <h2
-              className="text-3xl md:text-5xl font-black tracking-tight text-white"
+              className="text-3xl md:text-5xl font-black tracking-tight text-zinc-900 dark:text-white"
               style={{ fontFamily: '"Syncopate", sans-serif' }}
             >
               How it works
             </h2>
-            <p className="text-sm text-zinc-400 max-w-md mx-auto mt-4 leading-relaxed">
+            <p className="text-sm text-zinc-600 dark:text-zinc-400 max-w-md mx-auto mt-4 leading-relaxed">
               Elevating your GitHub profile is a simple 3-step process. Here is how you construct
               your code monument.
             </p>
@@ -965,7 +1013,7 @@ export default function LandingPage() {
                 whileInView={{ opacity: 1, y: 0 }}
                 viewport={{ once: true, margin: '-100px' }}
                 transition={{ delay: idx * 0.15, duration: 0.6 }}
-                className="relative z-10 flex flex-col items-center text-center p-6 rounded-3xl border border-zinc-300 dark:border-white/5 bg-white dark:bg-black/40 backdrop-blur-xl hover:border-emerald-500/20 hover:bg-white/[0.02] transition-all duration-500 group"
+                className="relative z-10 flex flex-col items-center text-center p-6 rounded-3xl border border-zinc-300 dark:border-white/5 bg-white dark:bg-white/[0.04] backdrop-blur-xl hover:border-emerald-500/40 hover:bg-zinc-50 dark:hover:bg-white/[0.08] dark:hover:border-emerald-500/40 dark:hover:shadow-[0_0_20px_rgba(0,230,180,0.1)] transition-all duration-500 group"
               >
                 <div className="absolute top-0 left-1/2 -translate-x-1/2 -translate-y-1/2 flex items-center justify-center w-12 h-12 rounded-2xl border border-white/10 bg-zinc-950 font-bold text-sm tracking-wider text-white shadow-xl group-hover:border-emerald-500/30 transition-all duration-300">
                   <span
@@ -982,7 +1030,7 @@ export default function LandingPage() {
                 >
                   {item.title}
                 </h4>
-                <p className="text-xs text-zinc-600 dark:text-zinc-400 leading-relaxed">
+                <p className="text-xs text-zinc-800 dark:text-zinc-400 leading-relaxed">
                   {item.desc}
                 </p>
               </motion.div>
