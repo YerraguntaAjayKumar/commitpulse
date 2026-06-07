@@ -76,27 +76,72 @@ vi.mock('next/link', () => ({
 vi.mock('framer-motion', () => {
   const MotionDiv = React.forwardRef<
     HTMLDivElement,
-    React.HTMLAttributes<HTMLDivElement> & { animate?: unknown }
-  >(({ animate, children, ...props }, ref) => (
-    <div ref={ref} data-animate={JSON.stringify(animate ?? null)} {...props}>
-      {children}
-    </div>
-  ));
+    React.HTMLAttributes<HTMLDivElement> & {
+      animate?: unknown;
+      exit?: unknown;
+      initial?: unknown;
+      layout?: unknown;
+      transition?: unknown;
+      variants?: unknown;
+    }
+  >(({ animate, exit, initial, layout, transition, variants, children, style, ...props }, ref) => {
+    void exit;
+    void initial;
+    void layout;
+    void transition;
+    void variants;
+
+    const motionStyle =
+      animate &&
+      typeof animate === 'object' &&
+      'x' in animate &&
+      'y' in animate &&
+      typeof animate.x === 'number' &&
+      typeof animate.y === 'number'
+        ? ({
+            transform: `translate3d(${animate.x}px, ${animate.y}px, 0)`,
+          } satisfies React.CSSProperties)
+        : {};
+
+    return (
+      <div ref={ref} style={{ ...style, ...motionStyle }} {...props}>
+        {children}
+      </div>
+    );
+  });
   MotionDiv.displayName = 'MotionDiv';
 
   const MotionSpan = ({ children }: { children?: React.ReactNode }) => <span>{children}</span>;
   const MotionHeading = ({
     children,
     ...props
-  }: React.HTMLAttributes<HTMLHeadingElement> & { animate?: unknown }) => (
-    <h1 {...props}>{children}</h1>
-  );
+  }: React.HTMLAttributes<HTMLHeadingElement> & {
+    animate?: unknown;
+    initial?: unknown;
+    transition?: unknown;
+  }) => {
+    const { animate, initial, transition, ...headingProps } = props;
+    void animate;
+    void initial;
+    void transition;
+
+    return <h1 {...headingProps}>{children}</h1>;
+  };
   const MotionParagraph = ({
     children,
     ...props
-  }: React.HTMLAttributes<HTMLParagraphElement> & { animate?: unknown }) => (
-    <p {...props}>{children}</p>
-  );
+  }: React.HTMLAttributes<HTMLParagraphElement> & {
+    animate?: unknown;
+    initial?: unknown;
+    transition?: unknown;
+  }) => {
+    const { animate, initial, transition, ...paragraphProps } = props;
+    void animate;
+    void initial;
+    void transition;
+
+    return <p {...paragraphProps}>{children}</p>;
+  };
 
   return {
     AnimatePresence: ({ children }: { children: React.ReactNode }) => <>{children}</>,
@@ -133,8 +178,8 @@ describe('ContributorsClient - Interactive Tooltips, Cursor Hovers & Touch Event
     });
   });
 
-  it('triggers mouse hover gestures on magnetic CTA nodes and computes responsive coordinates', async () => {
-    const { container } = renderClient();
+  it('triggers mouse hover gestures on magnetic CTA nodes and computes local shift coordinates', async () => {
+    renderClient();
     const exploreLink = screen.getByRole('link', { name: /Explore The Elite/i });
     const magneticWrapper = exploreLink.parentElement as HTMLElement;
 
@@ -153,9 +198,8 @@ describe('ContributorsClient - Interactive Tooltips, Cursor Hovers & Touch Event
     fireEvent.mouseMove(magneticWrapper, { clientX: 250, clientY: 100 });
 
     await waitFor(() => {
-      expect(magneticWrapper).toHaveAttribute('data-animate', JSON.stringify({ x: 10, y: 4 }));
+      expect(magneticWrapper.style.transform).toBe('translate3d(10px, 4px, 0)');
     });
-    expect(container.querySelector('[data-animate="{\\"x\\":10,\\"y\\":4}"]')).toBeTruthy();
   });
 
   it('updates the custom cursor transform from window mouse coordinates', () => {
@@ -196,16 +240,14 @@ describe('ContributorsClient - Interactive Tooltips, Cursor Hovers & Touch Event
     const { container } = renderClient();
     const cursor = container.querySelector('.pointer-events-none.z-\\[100\\]') as HTMLElement;
     const exploreLink = screen.getByRole('link', { name: /Explore The Elite/i });
-    const profileLink = container.querySelector(
-      'a[href="https://github.com/alice"]'
-    ) as HTMLElement;
+    const statCard = container.querySelector('.stat-item.group') as HTMLElement;
 
     expect(cursor).toHaveClass('pointer-events-none');
     expect(exploreLink).toHaveClass('group', 'hover:scale-105', 'active:scale-95');
-    expect(profileLink).toHaveClass('block', 'hover:border-black/20', 'hover:bg-black/[0.05]');
+    expect(statCard).toHaveClass('group', 'hover:bg-black/[0.04]', 'dark:hover:bg-white/[0.04]');
   });
 
-  it('hides temporary hover offsets when mouseleave resets the magnetic overlay visuals', async () => {
+  it('hides temporary magnetic offset visuals when mouseleave resets the CTA transform', async () => {
     renderClient();
     const repositoryLink = screen.getByRole('link', { name: /View Repository/i });
     const magneticWrapper = repositoryLink.parentElement as HTMLElement;
@@ -223,14 +265,15 @@ describe('ContributorsClient - Interactive Tooltips, Cursor Hovers & Touch Event
     } as DOMRect);
 
     fireEvent.mouseMove(magneticWrapper, { clientX: 90, clientY: 50 });
+
     await waitFor(() => {
-      expect(magneticWrapper).toHaveAttribute('data-animate', JSON.stringify({ x: 4, y: 2 }));
+      expect(magneticWrapper.style.transform).toBe('translate3d(4px, 2px, 0)');
     });
 
     fireEvent.mouseLeave(magneticWrapper);
 
     await waitFor(() => {
-      expect(magneticWrapper).toHaveAttribute('data-animate', JSON.stringify({ x: 0, y: 0 }));
+      expect(magneticWrapper.style.transform).toBe('translate3d(0px, 0px, 0)');
     });
   });
 });
