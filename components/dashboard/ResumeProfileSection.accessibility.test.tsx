@@ -16,10 +16,7 @@ vi.mock('sonner', () => ({
 
 vi.mock('framer-motion', () => ({
   motion: {
-    div: ({
-      children,
-      ...props
-    }: HTMLAttributes<HTMLDivElement> & { children?: ReactNode }) => (
+    div: ({ children, ...props }: HTMLAttributes<HTMLDivElement> & { children?: ReactNode }) => (
       <div {...props}>{children}</div>
     ),
   },
@@ -229,9 +226,7 @@ describe('ResumeProfileSection – accessibility', () => {
     await userEvent.click(screen.getByRole('button', { name: /upload resume file/i }));
 
     const previewHeadings = screen.getAllByRole('heading');
-    expect(
-      screen.getByRole('heading', { name: /review parsed data/i })
-    ).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: /review parsed data/i })).toBeInTheDocument();
 
     const previewLevels = previewHeadings
       .map((h) => parseInt(h.tagName.replace('H', ''), 10))
