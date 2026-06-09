@@ -58,7 +58,6 @@ const TARGET_PRIORITY: Record<string, number> = {
   githubactions: 93,
   vscode: 95,
   vite: 96,
-  figma: 92,
   python: 98,
   java: 94,
   csharp: 91,
