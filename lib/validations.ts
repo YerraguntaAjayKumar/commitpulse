@@ -642,7 +642,14 @@ export const resumeConfirmDataSchema = z.object({
     .max(50, { message: 'Too many education entries (max 50)' })
     .default([])
     .transform((items) =>
-      items.filter((e) => e.institution || e.degree || e.field || e.startDate || e.endDate)
+      items.filter(
+        (e) =>
+          e.institution.length > 0 &&
+          e.degree.length > 0 &&
+          e.field.length > 0 &&
+          e.startDate.length > 0 &&
+          e.endDate.length > 0
+      )
     ),
   experience: z
     .array(
@@ -657,7 +664,13 @@ export const resumeConfirmDataSchema = z.object({
     .max(50, { message: 'Too many experience entries (max 50)' })
     .default([])
     .transform((items) =>
-      items.filter((x) => x.company || x.role || x.startDate || x.endDate || x.description)
+      items.filter(
+        (x) =>
+          x.company.length > 0 &&
+          x.role.length > 0 &&
+          x.startDate.length > 0 &&
+          x.endDate.length > 0
+      )
     ),
 });
 
